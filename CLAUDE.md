@@ -1,0 +1,197 @@
+# ic_python_client — Python SDK для Intelion Cloud API
+
+Standalone Python-клиент для REST API Intelion Cloud (`/api/v2/`). Не зависит от Django — чистый httpx.
+
+## Стек
+
+- **Python 3.9+**, единственная runtime-зависимость — `httpx>=0.24`
+- **Dev:** pytest + pytest-asyncio + respx
+- **Сборка:** setuptools (pyproject.toml), пакет `intelion-cloud`, версия 0.1.0
+
+## Структура
+
+```
+ic_python_client/
+├── Dockerfile              # standalone-образ для тестов
+├── pyproject.toml
+├── intelion_cloud/
+│   ├── __init__.py         # Public API: клиенты, модели, exceptions, enums
+│   ├── _client.py          # IntelionCloud (sync), AsyncIntelionCloud (async)
+│   ├── _transport.py       # SyncTransport / AsyncTransport (httpx + retry)
+│   ├── _pagination.py      # PaginatedResponse[T], auto-pagination helpers
+│   ├── constants.py        # Enums: ServerStatus, ServerState, PricePlan, BillingPeriod, OSType
+│   ├── exceptions.py       # Иерархия ошибок (APIError → Auth/Forbidden/NotFound/...)
+│   ├── models/
+│   │   ├── _base.py        # _get(), _parse_nested(), _parse_nested_list()
+│   │   ├── components.py   # GPU, CPU, RAM, SSD, HDD, OSImage
+│   │   ├── flavors.py      # Flavor
+│   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer
+│   │   └── users.py        # User
+│   └── resources/
+│       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация)
+│       ├── cloud_servers.py# CloudServers / AsyncCloudServers
+│       ├── flavors.py      # Flavors / AsyncFlavors
+│       ├── os_images.py    # OSImages / AsyncOSImages
+│       └── users.py        # Users / AsyncUsers
+└── tests/
+    ├── conftest.py         # Fixtures, SAMPLE_* данные
+    ├── test_client.py      # Init, context manager, resources attached
+    ├── test_transport.py   # Error mapping (401→AuthenticationError, ...), retry logic
+    ├── test_models.py      # from_dict() для всех моделей
+    ├── test_cloud_servers.py # CRUD, actions, pagination, clone, migrate
+    ├── test_flavors.py     # list()
+    └── test_users.py       # me(), get(), update()
+```
+
+## Архитектура
+
+### Слои
+
+```
+IntelionCloud / AsyncIntelionCloud       ← точка входа, создаёт ресурсы
+    ↓
+    Resources (CloudServers, Flavors, OSImages, Users)  ← бизнес-методы (list, get, create, start, ...)
+    ↓
+    SyncResource / AsyncResource         ← _get(), _post(), _patch(), _list_all(), _list_page()
+    ↓
+    SyncTransport / AsyncTransport       ← httpx.Client, retry, error mapping
+```
+
+### Транспорт (_transport.py)
+
+- **Base URL:** `{base_url}/api/v2/` (default: `https://intelion.cloud/api/v2/`)
+- **Auth:** заголовок `Authorization: Token {token}`
+- **Timeout:** 30s overall, 10s connect (настраивается)
+- **Retry:**
+  - 429 Rate Limit → до 3 ретраев, exponential backoff (или Retry-After), **включая POST**
+  - 5xx Server Error → 1 ретрай, **только идемпотентные** (GET/PUT/PATCH/DELETE)
+  - Connection/Timeout → 2 ретрая, только идемпотентные
+
+### Пагинация (_pagination.py)
+
+DRF-совместимая: `count`, `next`, `previous`, `results`.
+
+- `resource.list()` (без page) → auto-paginate: обходит все страницы, возвращает `List[Model]`
+- `resource.list(page=N)` → одна страница `PaginatedResponse[Model]` с `.has_next`, `.count`
+- `extract_next_page()` — парсит absolute URL из `next`, достаёт relative path + params
+
+### Модели
+
+Все модели — `@dataclass(frozen=True)` (immutable). Десериализация через `Model.from_dict(data)`.
+
+Хелперы в `_base.py`:
+- `_get(data, key)` — как `dict.get()`, но `""` → `None`
+- `_parse_nested(data, key, cls)` — вложенный объект → `cls.from_dict()`
+- `_parse_nested_list(data, key, cls)` — список вложенных объектов
+
+### Exceptions
+
+```
+IntelionCloudError (base)
+├── APIError (status_code, response_body)
+│   ├── AuthenticationError    # 401
+│   ├── ForbiddenError         # 403
+│   ├── NotFoundError          # 404
+│   ├── ConflictError          # 409 (сервер занят операцией)
+│   ├── RateLimitError         # 429 (+retry_after)
+│   ├── ValidationError        # 400 (+field_errors dict)
+│   └── ServerError            # 5xx
+└── ConnectionError            # сетевой уровень
+```
+
+`_extract_message()` ищет ключи `detail`, `message`, `error`, `non_field_errors` в теле ответа.
+
+### Enums (constants.py)
+
+| Enum | Значения |
+|------|----------|
+| `ServerStatus` | ERROR=-4, DELETED=-3, REQUESTED=-2, PAUSED=-1, PAUSING=0, START=1, ACTIVE=2, PREPARING=3 |
+| `ServerState` | IDLE=0, STARTING=100, SHELVING=200, MIGRATING_*=301-304, CLONING=400, QUEUED=500, AWAITING_PASSWORD=600, MAINTENANCE=700 |
+| `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
+| `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
+| `OSType` | WINDOWS="win", LINUX="lin" |
+
+## API-эндпоинты
+
+| Ресурс | Метод | Endpoint | Описание |
+|--------|-------|----------|----------|
+| **CloudServers** | `list()` | GET `cloud-servers/` | Список серверов (auto-paginate) |
+| | `get(id)` | GET `cloud-servers/{id}/` | Один сервер |
+| | `create(...)` | POST `server-orders/` | Создать сервер |
+| | `update(id, ...)` | PATCH `cloud-servers/{id}/` | Обновить имя / auto_renewal |
+| | `start(id)` | POST `cloud-servers/{id}/actions/` | Запустить (status=2) |
+| | `stop(id)` | POST `cloud-servers/{id}/actions/` | Остановить (status=-1) |
+| | `reboot(id)` | POST `cloud-servers/{id}/actions/` | Перезагрузить (status="REBOOT") |
+| | `delete(id)` | POST `cloud-servers/{id}/actions/` | Удалить (status=-3) |
+| | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить + affordable_runtime |
+| | `get_password(id)` | GET `cloud-servers/{id}/password/` | Пароль Windows |
+| | `clone(id)` | POST `cloud-servers/{id}/clone/` | Клонировать |
+| | `migrate(id, ...)` | POST `cloud-servers/{id}/migrate/` | Мигрировать на другой flavor |
+| **Flavors** | `list()` | GET `flavors/` | Список flavors |
+| **OSImages** | `list(gpu_id=)` | GET `os-images/` | ОС-образы (фильтр по GPU) |
+| **Users** | `me()` | GET `users/` | Текущий пользователь (первый в списке) |
+| | `get(id)` | GET `users/{id}/` | Пользователь по ID |
+| | `update(id, ...)` | PATCH `users/{id}/` | Обновить профиль |
+
+## Тесты
+
+**52 теста**, все проходят в Docker.
+
+### Запуск
+
+```bash
+cd ic_python_client
+docker build -t ic-python-client-test .
+docker run --rm ic-python-client-test
+```
+
+### Паттерны тестирования
+
+- **respx** — мок httpx-запросов. Используется декоратор `@respx.mock(base_url=API_URL)`.
+- **SAMPLE_* константы** в `conftest.py` — полные JSON-ответы API для каждой модели.
+- Тесты sync-only (async-клиент покрыт только init/context manager).
+
+### Известная ловушка: respx и auto-pagination
+
+**respx матчит роуты по порядку регистрации.** Роут `get("path/")` без params ловит ВСЕ запросы к этому path, включая `?page=2`. Для тестов пагинации использовать `side_effect` со списком ответов:
+
+```python
+respx_mock.get("cloud-servers/").mock(
+    side_effect=[
+        httpx.Response(200, json={...first_page...}),
+        httpx.Response(200, json={...second_page...}),
+    ]
+)
+```
+
+НЕ работает (бесконечный цикл):
+```python
+respx_mock.get("cloud-servers/").respond(200, json={...next: "?page=2"...})
+respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
+# ↑ второй mock никогда не сработает — первый перехватывает всё
+```
+
+## Соответствие серверному API
+
+Модели клиента зеркалят сериализаторы DRF из `website/user_panel/` и `website/servers/`:
+
+| Клиентская модель | DRF Serializer (серверный) |
+|---|---|
+| `CloudServer` | `CloudServerSerializer` (user_panel) |
+| `Flavor` | `FlavorSerializer` (servers) |
+| `GPU/CPU/RAM/SSD/HDD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
+| `User` | `ICUserSerializer` (user_panel) |
+| `UsageAct` | `UsageActSerializer` (user_panel) |
+| `OSImage` | `OSImageSerializer` (servers) |
+
+**Ключевое отличие:** `CloudServer.flavor_oid` — cloud vs dedicated discriminator (NULL = dedicated). Совпадает с `UserConfiguration.flavor_oid` на сервере.
+
+## Добавление нового ресурса
+
+1. Создать модель в `models/` — frozen dataclass с `from_dict()`
+2. Экспортировать из `models/__init__.py`
+3. Создать sync + async resource-классы в `resources/` (наследуют `SyncResource`/`AsyncResource`)
+4. Экспортировать из `resources/__init__.py`
+5. Подключить к клиенту в `_client.py` (обоим: `IntelionCloud` и `AsyncIntelionCloud`)
+6. Экспортировать из `__init__.py`
+7. Написать тесты с respx-моками и SAMPLE_* данными в conftest
