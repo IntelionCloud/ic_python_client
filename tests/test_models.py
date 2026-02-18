@@ -136,7 +136,7 @@ class TestCloudServer:
         assert server.gpu.name == "NVIDIA H100"
         assert server.cpu is not None
         assert server.ram is not None
-        assert server.ssd is not None
+        assert server.network_disk is not None
         assert server.os is not None
         assert server.os.name == "Ubuntu 22.04 LTS"
         # Usage act

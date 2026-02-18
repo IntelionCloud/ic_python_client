@@ -133,10 +133,10 @@ class CloudServer:
     cpu_count: int = 0
     ram: Optional[RAM] = None
     ram_count: int = 0
-    ssd: Optional[SSD] = None
-    ssd_count: int = 0
-    nvme: Optional[SSD] = None
-    nvme_count: int = 0
+    network_disk: Optional[SSD] = None
+    network_disk_count: int = 0
+    local_disk: Optional[SSD] = None
+    local_disk_count: int = 0
     hdd: Optional[HDD] = None
     hdd_count: int = 0
     os: Optional[OSImage] = None
@@ -148,8 +148,8 @@ class CloudServer:
     white_ips: List[WhiteIP] = field(default_factory=list)
     monthly_price_rub: Optional[float] = None
     total_ram_size: int = 0
-    total_ssd_size: int = 0
-    total_nvme_size: int = 0
+    total_network_disk_size: int = 0
+    total_local_disk_size: int = 0
     total_hdd_size: int = 0
     max_available: int = 0
 
@@ -177,10 +177,10 @@ class CloudServer:
             cpu_count=data.get("cpu_count", 0),
             ram=_parse_nested(data, "ram", RAM),
             ram_count=data.get("ram_count", 0),
-            ssd=_parse_nested(data, "ssd", SSD),
-            ssd_count=data.get("ssd_count", 0),
-            nvme=_parse_nested(data, "nvme", SSD),
-            nvme_count=data.get("nvme_count", 0),
+            network_disk=_parse_nested(data, "network_disk", SSD),
+            network_disk_count=data.get("network_disk_count", 0),
+            local_disk=_parse_nested(data, "local_disk", SSD),
+            local_disk_count=data.get("local_disk_count", 0),
             hdd=_parse_nested(data, "hdd", HDD),
             hdd_count=data.get("hdd_count", 0),
             os=_parse_nested(data, "os", OSImage),
@@ -192,8 +192,8 @@ class CloudServer:
             white_ips=_parse_nested_list(data, "white_ips", WhiteIP),
             monthly_price_rub=_get(data, "monthly_price_rub"),
             total_ram_size=data.get("total_ram_size", 0),
-            total_ssd_size=data.get("total_ssd_size", 0),
-            total_nvme_size=data.get("total_nvme_size", 0),
+            total_network_disk_size=data.get("total_network_disk_size", 0),
+            total_local_disk_size=data.get("total_local_disk_size", 0),
             total_hdd_size=data.get("total_hdd_size", 0),
             max_available=data.get("max_available", 0),
         )
