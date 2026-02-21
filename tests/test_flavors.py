@@ -23,7 +23,7 @@ class TestFlavors:
         flavors = client.flavors.list()
         assert len(flavors) == 1
         f = flavors[0]
-        assert f.id == "abc-def-123"
+        assert f.id == 1
         assert f.name == "1x H100 80GB"
         assert f.gpu_count == 1
         assert f.gpu is not None

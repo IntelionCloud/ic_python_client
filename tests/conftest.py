@@ -87,10 +87,11 @@ SAMPLE_OS_IMAGE = {
 }
 
 SAMPLE_FLAVOR = {
-    "id": "abc-def-123",
+    "id": 1,
+    "openstack_id": "abc-def-123",
     "name": "1x H100 80GB",
     "cpu_count": 16,
-    "ram_count": 128.0,
+    "ram_count": 128,
     "gpu_count": 1,
     "flavor_monthly_price_rub_cents": 10800000,
     "flavor_hourly_price_rub_cents": 16069,
@@ -98,7 +99,6 @@ SAMPLE_FLAVOR = {
     "cpu": SAMPLE_CPU,
     "ram": SAMPLE_RAM,
     "gpu": SAMPLE_GPU,
-    "gpu_name": "NVIDIA H100",
     "extra_specs": {},
 }
 

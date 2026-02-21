@@ -178,7 +178,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 | Клиентская модель | DRF Serializer (серверный) |
 |---|---|
 | `CloudServer` | `CloudServerSerializer` (user_panel) |
-| `Flavor` | `FlavorSerializer` (servers) |
+| `Flavor` | `FlavorConfigSerializer` (servers) |
 | `GPU/CPU/RAM/SSD/HDD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
 | `User` | `ICUserSerializer` (user_panel) |
 | `UsageAct` | `UsageActSerializer` (user_panel) |

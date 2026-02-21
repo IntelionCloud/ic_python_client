@@ -91,10 +91,11 @@ class TestOSImage:
 class TestFlavor:
     def test_from_dict_with_nested(self):
         flavor = Flavor.from_dict(SAMPLE_FLAVOR)
-        assert flavor.id == "abc-def-123"
+        assert flavor.id == 1
+        assert flavor.openstack_id == "abc-def-123"
         assert flavor.name == "1x H100 80GB"
         assert flavor.cpu_count == 16
-        assert flavor.ram_count == 128.0
+        assert flavor.ram_count == 128
         assert flavor.gpu_count == 1
         assert flavor.max_available == 5
         # Nested models
