@@ -1,4 +1,4 @@
-"""Hardware component models (GPU, CPU, RAM, SSD, HDD, OSImage)."""
+"""Hardware component models (GPU, CPU, RAM, SSD, OSImage)."""
 
 from __future__ import annotations
 
@@ -191,36 +191,6 @@ class SSD:
             discount_percent=data.get("discount_percent", 0),
         )
 
-
-@dataclass(frozen=True)
-class HDD:
-    """HDD drive specification."""
-
-    size: int
-    group_title: str
-    monthly_price_rub_cents: int
-    hourly_price_rub_cents: int
-    daily_price_rub_cents: int
-    monthly_price_rub: Optional[float] = None
-    hourly_price_rub: Optional[float] = None
-    daily_price_rub: Optional[float] = None
-    old_monthly_price_rub: Optional[float] = None
-    discount_percent: int = 0
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> HDD:
-        return cls(
-            size=data.get("size", 0),
-            group_title=data.get("group_title", ""),
-            monthly_price_rub_cents=data.get("monthly_price_rub_cents", 0),
-            hourly_price_rub_cents=data.get("hourly_price_rub_cents", 0),
-            daily_price_rub_cents=data.get("daily_price_rub_cents", 0),
-            monthly_price_rub=_get(data, "monthly_price_rub"),
-            hourly_price_rub=_get(data, "hourly_price_rub"),
-            daily_price_rub=_get(data, "daily_price_rub"),
-            old_monthly_price_rub=_get(data, "old_monthly_price_rub"),
-            discount_percent=data.get("discount_percent", 0),
-        )
 
 
 @dataclass(frozen=True)

@@ -26,7 +26,6 @@ from .exceptions import (
 from .models import (
     CPU,
     GPU,
-    HDD,
     OSImage,
     RAM,
     SSD,
@@ -56,7 +55,6 @@ __all__ = [
     "CPU",
     "RAM",
     "SSD",
-    "HDD",
     "OSImage",
     "UsageAct",
     "DebtInfo",

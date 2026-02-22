@@ -3,7 +3,6 @@
 from intelion_cloud.models import (
     CPU,
     GPU,
-    HDD,
     OSImage,
     RAM,
     SSD,

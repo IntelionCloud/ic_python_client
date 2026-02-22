@@ -158,7 +158,6 @@ SAMPLE_CLOUD_SERVER = {
     "total_ram_size": 128,
     "total_network_disk_size": 1024,
     "total_local_disk_size": 0,
-    "total_hdd_size": 0,
     "max_available": 5,
 }
 

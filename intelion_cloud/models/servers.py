@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ._base import _get, _parse_nested, _parse_nested_list
-from .components import CPU, GPU, HDD, OSImage, RAM, SSD
+from .components import CPU, GPU, OSImage, RAM, SSD
 
 
 @dataclass(frozen=True)
@@ -137,8 +137,6 @@ class CloudServer:
     network_disk_count: int = 0
     local_disk: Optional[SSD] = None
     local_disk_count: int = 0
-    hdd: Optional[HDD] = None
-    hdd_count: int = 0
     os: Optional[OSImage] = None
     usage_act: Optional[UsageAct] = None
     last_finished_usage_act: Optional[UsageAct] = None
@@ -150,7 +148,6 @@ class CloudServer:
     total_ram_size: int = 0
     total_network_disk_size: int = 0
     total_local_disk_size: int = 0
-    total_hdd_size: int = 0
     max_available: int = 0
 
     @classmethod
@@ -181,8 +178,6 @@ class CloudServer:
             network_disk_count=data.get("network_disk_count", 0),
             local_disk=_parse_nested(data, "local_disk", SSD),
             local_disk_count=data.get("local_disk_count", 0),
-            hdd=_parse_nested(data, "hdd", HDD),
-            hdd_count=data.get("hdd_count", 0),
             os=_parse_nested(data, "os", OSImage),
             usage_act=_parse_nested(data, "usage_act", UsageAct),
             last_finished_usage_act=_parse_nested(data, "last_finished_usage_act", UsageAct),
@@ -194,7 +189,6 @@ class CloudServer:
             total_ram_size=data.get("total_ram_size", 0),
             total_network_disk_size=data.get("total_network_disk_size", 0),
             total_local_disk_size=data.get("total_local_disk_size", 0),
-            total_hdd_size=data.get("total_hdd_size", 0),
             max_available=data.get("max_available", 0),
         )
 

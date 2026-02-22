@@ -1,6 +1,6 @@
 """Data models for the Intelion Cloud API."""
 
-from .components import CPU, GPU, HDD, OSImage, RAM, SSD
+from .components import CPU, GPU, OSImage, RAM, SSD
 from .flavors import Flavor
 from .servers import (
     CloudServer,
@@ -18,7 +18,6 @@ __all__ = [
     "CPU",
     "RAM",
     "SSD",
-    "HDD",
     "OSImage",
     "Flavor",
     "CloudServer",

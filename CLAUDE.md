@@ -23,7 +23,7 @@ ic_python_client/
 │   ├── exceptions.py       # Иерархия ошибок (APIError → Auth/Forbidden/NotFound/...)
 │   ├── models/
 │   │   ├── _base.py        # _get(), _parse_nested(), _parse_nested_list()
-│   │   ├── components.py   # GPU, CPU, RAM, SSD, HDD, OSImage
+│   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage
 │   │   ├── flavors.py      # Flavor
 │   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer
 │   │   └── users.py        # User
@@ -179,7 +179,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 |---|---|
 | `CloudServer` | `CloudServerSerializer` (user_panel) |
 | `Flavor` | `FlavorConfigSerializer` (servers) |
-| `GPU/CPU/RAM/SSD/HDD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
+| `GPU/CPU/RAM/SSD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
 | `User` | `ICUserSerializer` (user_panel) |
 | `UsageAct` | `UsageActSerializer` (user_panel) |
 | `OSImage` | `OSImageSerializer` (servers) |
