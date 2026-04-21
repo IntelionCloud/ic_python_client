@@ -60,17 +60,13 @@ class TestErrorMapping:
     @respx.mock(base_url=API_URL)
     def test_400_raises_validation_error_with_field_errors(self, respx_mock):
         errors = {"name": ["This field is required."], "flavor_id": ["Invalid flavor."]}
-        respx_mock.post("server-orders/").respond(400, json=errors)
+        respx_mock.post("cloud-servers/").respond(400, json=errors)
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         with pytest.raises(ValidationError) as exc_info:
             client.cloud_servers.create(
                 name="",
-                flavor_id="bad",
-                cpu_id=1,
-                cpu_count=1,
-                ram_id=1,
-                ram_count=1,
-                ssd_count=1,
+                flavor_id=999,
+                ssd_count=30,
                 os_id=1,
             )
         assert exc_info.value.field_errors["name"] == ["This field is required."]
@@ -139,7 +135,7 @@ class TestRetryLogic:
     @respx.mock(base_url=API_URL)
     def test_500_no_retry_on_post(self, respx_mock):
         """POST requests should not retry on 5xx (not idempotent)."""
-        route = respx_mock.post("server-orders/")
+        route = respx_mock.post("cloud-servers/")
         route.side_effect = [
             httpx.Response(500, json={"detail": "Internal error"}),
         ]
@@ -147,12 +143,8 @@ class TestRetryLogic:
         with pytest.raises(ServerError):
             client.cloud_servers.create(
                 name="test",
-                flavor_id="abc",
-                cpu_id=1,
-                cpu_count=1,
-                ram_id=1,
-                ram_count=1,
-                ssd_count=1,
+                flavor_id=1,
+                ssd_count=30,
                 os_id=1,
             )
         assert route.call_count == 1
@@ -161,7 +153,7 @@ class TestRetryLogic:
     @respx.mock(base_url=API_URL)
     def test_429_retries_on_post(self, respx_mock):
         """POST requests SHOULD retry on 429 (rate limit)."""
-        route = respx_mock.post("server-orders/")
+        route = respx_mock.post("cloud-servers/")
         route.side_effect = [
             httpx.Response(429, json={"detail": "Rate limited"}),
             httpx.Response(
@@ -181,12 +173,8 @@ class TestRetryLogic:
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = client.cloud_servers.create(
             name="test",
-            flavor_id="abc",
-            cpu_id=1,
-            cpu_count=1,
-            ram_id=1,
-            ram_count=1,
-            ssd_count=1,
+            flavor_id=1,
+            ssd_count=30,
             os_id=1,
         )
         assert server.id == 1

@@ -83,7 +83,7 @@ SAMPLE_OS_IMAGE = {
     "description": "Ubuntu Server",
     "ssh_enabled": True,
     "rdp_enabled": False,
-    "compatible_gpu_ids": [],
+    "compatible_flavor_ids": [],
 }
 
 SAMPLE_FLAVOR = {
@@ -99,7 +99,20 @@ SAMPLE_FLAVOR = {
     "cpu": SAMPLE_CPU,
     "ram": SAMPLE_RAM,
     "gpu": SAMPLE_GPU,
-    "extra_specs": {},
+}
+
+SAMPLE_SOFTWARE_ADDON = {
+    "uca_id": 555,
+    "id": 7,
+    "name": "ComfyUI",
+    "port": 8188,
+    "status": "INSTALLING",
+    "access_token": "tkn-abc",
+    "progress_message": "Downloading weights...",
+    "error_message": "",
+    "hardware_mode": "GPU",
+    "last_heartbeat_dt": "2026-04-21T12:00:00Z",
+    "has_error": False,
 }
 
 SAMPLE_USAGE_ACT = {
@@ -154,6 +167,8 @@ SAMPLE_CLOUD_SERVER = {
     "promocode": None,
     "physical_server": None,
     "white_ips": [{"address_v4": "10.0.0.1"}],
+    "software_addons": [SAMPLE_SOFTWARE_ADDON],
+    "card_background": "https://cdn.intelion.cloud/bg/42.png",
     "monthly_price_rub": "108000.00",
     "total_ram_size": 128,
     "total_network_disk_size": 1024,

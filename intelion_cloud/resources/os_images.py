@@ -17,17 +17,25 @@ class OSImages(SyncResource):
     def list(
         self,
         *,
+        flavor_id: Optional[int] = None,
         gpu_id: Optional[int] = None,
         page: Optional[int] = None,
     ) -> Union[List[OSImage], PaginatedResponse[OSImage]]:
         """List available OS images.
 
         Args:
-            gpu_id: Filter images compatible with a specific GPU.
+            flavor_id: Filter images compatible with a specific FlavorConfig
+                (preferred — the canonical compatibility dimension).
+            gpu_id: Filter images compatible with any flavor that uses this GPU.
             page: If given, return a single page instead of all results.
+
+        Without any filter, only universal images (compatible with every flavor)
+        are returned.
         """
         params: Dict[str, Any] = {}
-        if gpu_id is not None:
+        if flavor_id is not None:
+            params["flavor_id"] = flavor_id
+        elif gpu_id is not None:
             params["gpu_id"] = gpu_id
 
         if page is not None:
@@ -41,11 +49,14 @@ class AsyncOSImages(AsyncResource):
     async def list(
         self,
         *,
+        flavor_id: Optional[int] = None,
         gpu_id: Optional[int] = None,
         page: Optional[int] = None,
     ) -> Union[List[OSImage], PaginatedResponse[OSImage]]:
         params: Dict[str, Any] = {}
-        if gpu_id is not None:
+        if flavor_id is not None:
+            params["flavor_id"] = flavor_id
+        elif gpu_id is not None:
             params["gpu_id"] = gpu_id
 
         if page is not None:

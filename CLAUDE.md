@@ -25,7 +25,7 @@ ic_python_client/
 │   │   ├── _base.py        # _get(), _parse_nested(), _parse_nested_list()
 │   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage
 │   │   ├── flavors.py      # Flavor
-│   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer
+│   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer, SoftwareAddonInstance
 │   │   └── users.py        # User
 │   └── resources/
 │       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация)
@@ -117,7 +117,7 @@ IntelionCloudError (base)
 |--------|-------|----------|----------|
 | **CloudServers** | `list()` | GET `cloud-servers/` | Список серверов (auto-paginate) |
 | | `get(id)` | GET `cloud-servers/{id}/` | Один сервер |
-| | `create(...)` | POST `server-orders/` | Создать сервер |
+| | `create(...)` | POST `cloud-servers/` | Создать сервер (canonical) |
 | | `update(id, ...)` | PATCH `cloud-servers/{id}/` | Обновить имя / auto_renewal |
 | | `start(id)` | POST `cloud-servers/{id}/actions/` | Запустить (status=2) |
 | | `stop(id)` | POST `cloud-servers/{id}/actions/` | Остановить (status=-1) |
@@ -126,16 +126,16 @@ IntelionCloudError (base)
 | | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить + affordable_runtime |
 | | `get_password(id)` | GET `cloud-servers/{id}/password/` | Пароль Windows |
 | | `clone(id)` | POST `cloud-servers/{id}/clone/` | Клонировать |
-| | `migrate(id, ...)` | POST `cloud-servers/{id}/migrate/` | Мигрировать на другой flavor |
+| | `migrate(id, flavor_id, price_plan)` | POST `cloud-servers/{id}/migrate/` | Мигрировать (FlavorConfig PK + price_plan) |
 | **Flavors** | `list()` | GET `flavors/` | Список flavors |
-| **OSImages** | `list(gpu_id=)` | GET `os-images/` | ОС-образы (фильтр по GPU) |
+| **OSImages** | `list(flavor_id= / gpu_id=)` | GET `os-images/` | ОС-образы (фильтр по FlavorConfig или GPU) |
 | **Users** | `me()` | GET `users/` | Текущий пользователь (первый в списке) |
 | | `get(id)` | GET `users/{id}/` | Пользователь по ID |
 | | `update(id, ...)` | PATCH `users/{id}/` | Обновить профиль |
 
 ## Тесты
 
-**52 теста**, все проходят в Docker.
+**53 теста**, все проходят в Docker.
 
 ### Запуск
 
@@ -185,6 +185,14 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 | `OSImage` | `OSImageSerializer` (servers) |
 
 **Ключевое отличие:** `CloudServer.flavor_oid` — cloud vs dedicated discriminator (NULL = dedicated). Совпадает с `UserConfiguration.flavor_oid` на сервере.
+
+## Важные контракты API v2
+
+- **`create()` → POST `cloud-servers/`** (canonical). Старый `server-orders/` теперь GET-only (deep-link handler).
+- **`create()` payload**: `{name, flavor_id (int PK FlavorConfig), ssd_count (min 30 GB), os_id, price_plan, promocode_id?, is_in_queue?, addon_ids?}`. CPU/RAM/GPU фиксируются флейвором — отдельно не передаются.
+- **`migrate()` payload**: `{flavor_id (int), price_plan}`. CPU/RAM/GPU тоже из флейвора.
+- **OSImage.compatible_flavor_ids** — список совместимых FlavorConfig. Пустой список = универсальный образ. (Раньше было `compatible_gpu_ids` — переименовано на сервере.)
+- **Фильтры OSImages**: `flavor_id` (точно) или `gpu_id` (через flavor.gpu_id). Без фильтра — только универсальные образы.
 
 ## Добавление нового ресурса
 

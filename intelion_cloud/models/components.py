@@ -203,7 +203,7 @@ class OSImage:
     description: str = ""
     ssh_enabled: bool = False
     rdp_enabled: bool = False
-    compatible_gpu_ids: Optional[List[int]] = None
+    compatible_flavor_ids: Optional[List[int]] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> OSImage:
@@ -214,5 +214,5 @@ class OSImage:
             description=data.get("description", ""),
             ssh_enabled=data.get("ssh_enabled", False),
             rdp_enabled=data.get("rdp_enabled", False),
-            compatible_gpu_ids=data.get("compatible_gpu_ids"),
+            compatible_flavor_ids=data.get("compatible_flavor_ids"),
         )

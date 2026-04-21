@@ -35,6 +35,7 @@ from .models import (
     PhysicalServer,
     Promocode,
     ServerStatus,
+    SoftwareAddonInstance,
     UsageAct,
     User,
     WhiteIP,
@@ -61,6 +62,7 @@ __all__ = [
     "Promocode",
     "WhiteIP",
     "PhysicalServer",
+    "SoftwareAddonInstance",
     # Constants
     "ServerStatusEnum",
     "ServerState",

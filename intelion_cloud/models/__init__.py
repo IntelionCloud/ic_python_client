@@ -8,6 +8,7 @@ from .servers import (
     PhysicalServer,
     Promocode,
     ServerStatus,
+    SoftwareAddonInstance,
     UsageAct,
     WhiteIP,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "PhysicalServer",
     "Promocode",
     "ServerStatus",
+    "SoftwareAddonInstance",
     "UsageAct",
     "WhiteIP",
     "User",

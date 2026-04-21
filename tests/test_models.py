@@ -85,6 +85,11 @@ class TestOSImage:
         assert img.type == "lin"
         assert img.ssh_enabled is True
         assert img.rdp_enabled is False
+        assert img.compatible_flavor_ids == []
+
+    def test_from_dict_with_compatible_flavors(self):
+        img = OSImage.from_dict({**SAMPLE_OS_IMAGE, "compatible_flavor_ids": [1, 2, 3]})
+        assert img.compatible_flavor_ids == [1, 2, 3]
 
 
 class TestFlavor:
@@ -145,6 +150,18 @@ class TestCloudServer:
         # White IPs
         assert len(server.white_ips) == 1
         assert server.white_ips[0].address_v4 == "10.0.0.1"
+        # Software addons
+        assert len(server.software_addons) == 1
+        addon = server.software_addons[0]
+        assert addon.uca_id == 555
+        assert addon.id == 7
+        assert addon.name == "ComfyUI"
+        assert addon.port == 8188
+        assert addon.status == "INSTALLING"
+        assert addon.access_token == "tkn-abc"
+        assert addon.has_error is False
+        # Card background
+        assert server.card_background == "https://cdn.intelion.cloud/bg/42.png"
 
     def test_from_dict_minimal(self):
         data = {
@@ -161,6 +178,8 @@ class TestCloudServer:
         assert server.id == 1
         assert server.gpu is None
         assert server.white_ips == []
+        assert server.software_addons == []
+        assert server.card_background is None
         assert server.usage_act is None
 
 

@@ -96,22 +96,17 @@ class TestCloudServersGet:
 class TestCloudServersCreate:
     @respx.mock(base_url=API_URL)
     def test_create(self, respx_mock):
-        respx_mock.post("server-orders/").respond(
+        respx_mock.post("cloud-servers/").respond(
             201, json={**SAMPLE_CLOUD_SERVER, "status": -2}
         )
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = client.cloud_servers.create(
             name="my-gpu-server",
-            flavor_id="abc-def-123",
-            cpu_id=1,
-            cpu_count=16,
-            ram_id=1,
-            ram_count=2,
-            ssd_count=1,
+            flavor_id=1,
+            ssd_count=50,
             os_id=1,
             price_plan=0,
-            gpu_id=1,
-            gpu_count=1,
+            addon_ids=[7],
         )
         assert server.id == 42
         # Verify the request payload
@@ -120,9 +115,14 @@ class TestCloudServersCreate:
 
         body = json.loads(req.content)
         assert body["name"] == "my-gpu-server"
-        assert body["flavor_id"] == "abc-def-123"
-        assert body["gpu_id"] == 1
-        assert body["gpu_count"] == 1
+        assert body["flavor_id"] == 1
+        assert body["ssd_count"] == 50
+        assert body["os_id"] == 1
+        assert body["price_plan"] == 0
+        assert body["addon_ids"] == [7]
+        assert "cpu_id" not in body
+        assert "gpu_id" not in body
+        assert "ram_id" not in body
         client.close()
 
 
@@ -247,17 +247,12 @@ class TestCloudServersAdvanced:
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = client.cloud_servers.migrate(
             42,
-            flavor_id="new-flavor-uuid",
+            flavor_id=5,
             price_plan=1,
-            gpu_id=2,
-            gpu_count=2,
         )
         assert server.flavor_oid == "new-flavor-uuid"
         import json
 
         body = json.loads(respx_mock.calls[0].request.content)
-        assert body["flavor_id"] == "new-flavor-uuid"
-        assert body["price_plan"] == 1
-        assert body["gpu_id"] == 2
-        assert body["gpu_count"] == 2
+        assert body == {"flavor_id": 5, "price_plan": 1}
         client.close()

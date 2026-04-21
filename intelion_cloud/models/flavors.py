@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from ._base import _get, _parse_nested
@@ -25,7 +25,6 @@ class Flavor:
     cpu: Optional[CPU] = None
     ram: Optional[RAM] = None
     gpu: Optional[GPU] = None
-    extra_specs: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Flavor:
@@ -42,5 +41,4 @@ class Flavor:
             cpu=_parse_nested(data, "cpu", CPU),
             ram=_parse_nested(data, "ram", RAM),
             gpu=_parse_nested(data, "gpu", GPU),
-            extra_specs=data.get("extra_specs") or {},
         )

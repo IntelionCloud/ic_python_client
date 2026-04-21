@@ -105,6 +105,39 @@ class PhysicalServer:
 
 
 @dataclass(frozen=True)
+class SoftwareAddonInstance:
+    """Software addon installed (or being installed) on a cloud server."""
+
+    uca_id: int
+    id: int
+    name: str
+    status: str
+    port: Optional[int] = None
+    access_token: str = ""
+    progress_message: str = ""
+    error_message: str = ""
+    hardware_mode: str = ""
+    last_heartbeat_dt: Optional[str] = None
+    has_error: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> SoftwareAddonInstance:
+        return cls(
+            uca_id=data["uca_id"],
+            id=data["id"],
+            name=data.get("name", ""),
+            status=data.get("status", ""),
+            port=_get(data, "port"),
+            access_token=data.get("access_token", "") or "",
+            progress_message=data.get("progress_message", "") or "",
+            error_message=data.get("error_message", "") or "",
+            hardware_mode=data.get("hardware_mode", "") or "",
+            last_heartbeat_dt=_get(data, "last_heartbeat_dt"),
+            has_error=data.get("has_error", False),
+        )
+
+
+@dataclass(frozen=True)
 class CloudServer:
     """A cloud (or dedicated) server configuration.
 
@@ -144,6 +177,8 @@ class CloudServer:
     promocode: Optional[Promocode] = None
     physical_server: Optional[PhysicalServer] = None
     white_ips: List[WhiteIP] = field(default_factory=list)
+    software_addons: List[SoftwareAddonInstance] = field(default_factory=list)
+    card_background: Optional[str] = None
     monthly_price_rub: Optional[float] = None
     total_ram_size: int = 0
     total_network_disk_size: int = 0
@@ -185,6 +220,8 @@ class CloudServer:
             promocode=_parse_nested(data, "promocode", Promocode),
             physical_server=_parse_nested(data, "physical_server", PhysicalServer),
             white_ips=_parse_nested_list(data, "white_ips", WhiteIP),
+            software_addons=_parse_nested_list(data, "software_addons", SoftwareAddonInstance),
+            card_background=_get(data, "card_background"),
             monthly_price_rub=_get(data, "monthly_price_rub"),
             total_ram_size=data.get("total_ram_size", 0),
             total_network_disk_size=data.get("total_network_disk_size", 0),
