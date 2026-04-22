@@ -6,7 +6,7 @@
 
 Official Python SDK for the [Intelion Cloud](https://intelion.cloud) GPU cloud API (`/api/v2/`).
 
-Pure `httpx` — no Django dependency. Sync and async clients, typed dataclass models, automatic pagination, retries with exponential backoff.
+Sync and async clients, typed dataclass models, automatic pagination, retries with exponential backoff.
 
 ## Install
 

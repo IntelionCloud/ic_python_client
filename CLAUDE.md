@@ -203,3 +203,81 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 5. Подключить к клиенту в `_client.py` (обоим: `IntelionCloud` и `AsyncIntelionCloud`)
 6. Экспортировать из `__init__.py`
 7. Написать тесты с respx-моками и SAMPLE_* данными в conftest
+
+## Release process
+
+**Релиз автоматизирован через GitHub Actions + PyPI Trusted Publishing (OIDC).** Секреты/токены в репозитории не нужны.
+
+### Когда делать релиз
+
+**Обязательно** — после любого изменения публичного API v2 в `client_board`, которое затронуло клиент (см. правило "API v2 ↔ ic_python_client sync" в `client_board/CLAUDE.md`). Внешние пользователи SDK должны получить обновление, иначе клиент тихо отстаёт от сервера.
+
+**По SemVer:**
+- `MAJOR` (0.x → 1.0, 1.x → 2.0) — ломающие изменения публичного API клиента. Любое изменение сигнатуры публичного метода, переименование/удаление поля модели, изменение endpoint/payload — это breaking для потребителя SDK.
+- `MINOR` (0.2 → 0.3) — новые ресурсы/методы/поля без ломки существующих.
+- `PATCH` (0.2.0 → 0.2.1) — багфиксы, обновление README/docs (PyPI-описание обновляется только при новой версии — артефакты на PyPI иммутабельны).
+
+### Как выпустить новую версию
+
+1. **Закоммитить все изменения в `main`** (включая тесты, которые должны быть зелёные).
+
+2. **Бампнуть версию в ДВУХ местах синхронно:**
+   - `pyproject.toml` → `version = "X.Y.Z"`
+   - `intelion_cloud/__init__.py` → `__version__ = "X.Y.Z"`
+
+   Release workflow валидирует соответствие тега обоим файлам — если не совпадает, релиз упадёт.
+
+3. **Закоммитить bump:**
+   ```bash
+   git add pyproject.toml intelion_cloud/__init__.py
+   git commit -m "Release vX.Y.Z"
+   git push origin main
+   ```
+
+4. **Создать и запушить тег:**
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z: <короткое описание>"
+   git push origin vX.Y.Z
+   ```
+
+5. **Ждать CI.** GitHub Actions автоматически:
+   - Прогонит `pytest` на Python 3.12.
+   - Соберёт `sdist + wheel`.
+   - Проверит `twine check`.
+   - Зальёт на PyPI через OIDC (job `publish`, environment `pypi`).
+   - Создаст GitHub Release с авто-сгенерированным changelog'ом и приложит артефакты.
+
+   Прогресс: https://github.com/IntelionCloud/ic_python_client/actions
+
+6. **Проверить:** `pip install --upgrade intelion-cloud` в чистом venv должен подтянуть новую версию через 1-2 минуты после окончания workflow.
+
+### Первичная настройка Trusted Publishing (делается один раз)
+
+Чтобы OIDC заработал, в настройках проекта на PyPI должен быть зарегистрирован trusted publisher:
+
+1. Открыть https://pypi.org/manage/project/intelion-cloud/settings/publishing/
+2. **Add a new publisher** → GitHub:
+   - **PyPI Project Name:** `intelion-cloud`
+   - **Owner:** `IntelionCloud`
+   - **Repository name:** `ic_python_client`
+   - **Workflow name:** `release.yml`
+   - **Environment name:** `pypi`
+3. В GitHub Actions создать environment `pypi`: https://github.com/IntelionCloud/ic_python_client/settings/environments — **New environment** → name `pypi` → можно добавить required reviewers для ручного approve перед публикацией.
+
+После этого workflow публикует от имени репо без каких-либо секретов.
+
+### Fallback: ручной релиз через токен
+
+Если CI сломался или нужно срочно — можно залить руками (токен в `credentials.md` → PyPi):
+
+```bash
+cd ic_python_client
+rm -rf build/ dist/ *.egg-info
+python -m build
+twine check dist/*
+TWINE_USERNAME=__token__ TWINE_PASSWORD='pypi-AgEI...' twine upload dist/*
+```
+
+### CI / тесты
+
+Отдельный workflow `test.yml` прогоняет pytest на матрице Python 3.9–3.13 на каждый push в `main` и каждый PR. Если тесты красные — релиз-workflow всё равно провалится (он запускает тесты заново перед билдом), но лучше ловить это до тега.
