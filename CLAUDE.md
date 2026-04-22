@@ -275,15 +275,18 @@ steps:
 
 ### Fallback: ручной релиз через токен
 
-Если CI сломался или нужно срочно — можно залить руками (токен в `credentials.md` → PyPi):
+Обычно не нужен — OIDC работает. Если CI сломался и нужно срочно:
 
-```bash
-cd ic_python_client
-rm -rf build/ dist/ *.egg-info
-python -m build
-twine check dist/*
-TWINE_USERNAME=__token__ TWINE_PASSWORD='pypi-AgEI...' twine upload dist/*
-```
+1. Создать одноразовый API-токен на https://pypi.org/manage/account/token/ (scope: `Project: intelion-cloud`, не entire account).
+2. Собрать и залить локально:
+   ```bash
+   cd ic_python_client
+   rm -rf build/ dist/ *.egg-info
+   python -m build
+   twine check dist/*
+   TWINE_USERNAME=__token__ TWINE_PASSWORD='pypi-AgEI...' twine upload dist/*
+   ```
+3. Сразу после релиза — revoke токен на PyPI. Не хранить в `credentials.md` или секретах.
 
 ### CI / тесты
 
