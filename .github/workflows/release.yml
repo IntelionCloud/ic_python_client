@@ -79,6 +79,8 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # required for OIDC Trusted Publishing
     steps:
       - name: Download built distributions
         uses: actions/download-artifact@v4
@@ -86,12 +88,8 @@ jobs:
           name: dist
           path: dist/
 
-      # TODO: switch to Trusted Publishing (OIDC) once configured on PyPI.
-      # See "Release process → Первичная настройка Trusted Publishing" in CLAUDE.md.
-      - name: Publish to PyPI (API token)
+      - name: Publish to PyPI (Trusted Publishing, OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
 
   github-release:
     name: Create GitHub Release

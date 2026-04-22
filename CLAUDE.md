@@ -206,7 +206,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
 ## Release process
 
-**Релиз автоматизирован через GitHub Actions.** Триггер — git-тег `vX.Y.Z`. Сейчас используется API token, хранящийся в GitHub repo secret `PYPI_API_TOKEN` (копия токена в `credentials.md` → PyPi). Апгрейд на Trusted Publishing (OIDC без секретов) — см. ниже.
+**Релиз автоматизирован через GitHub Actions + PyPI Trusted Publishing (OIDC).** Триггер — git-тег `vX.Y.Z`. Никаких токенов/секретов в репозитории не требуется: PyPI валидирует релиз по GitHub OIDC claim (owner/repo/workflow). Фейловер через ручной токен описан в секции "Fallback".
 
 ### Когда делать релиз
 
@@ -251,23 +251,15 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
 6. **Проверить:** `pip install --upgrade intelion-cloud` в чистом venv должен подтянуть новую версию через 1-2 минуты после окончания workflow.
 
-### Upgrade path: Trusted Publishing (OIDC, без секретов)
+### Trusted Publishing: как настроено
 
-Сейчас CI использует API token. Чтобы перейти на OIDC (PyPI сам проверяет, что релиз действительно из этого репо через GitHub OIDC — токен не нужен):
+На https://pypi.org/manage/project/intelion-cloud/settings/publishing/ зарегистрирован publisher:
+- **Owner:** `IntelionCloud`
+- **Repository:** `ic_python_client`
+- **Workflow:** `release.yml`
+- **Environment:** пусто (без GitHub environment — не требуется прав на создание environment в PAT)
 
-1. Открыть https://pypi.org/manage/project/intelion-cloud/settings/publishing/
-2. **Add a new publisher** → GitHub:
-   - **PyPI Project Name:** `intelion-cloud`
-   - **Owner:** `IntelionCloud`
-   - **Repository name:** `ic_python_client`
-   - **Workflow name:** `release.yml`
-   - **Environment name:** `pypi` (или пусто — но с environment удобнее ставить required reviewers)
-3. (Опционально) Создать environment `pypi` на https://github.com/IntelionCloud/ic_python_client/settings/environments
-4. В `.github/workflows/release.yml` в job `publish`:
-   - Добавить `permissions: { id-token: write }`
-   - Добавить `environment: pypi` (если создавал на шаге 3)
-   - Убрать `with: { password: ${{ secrets.PYPI_API_TOKEN }} }` — OIDC использует `id-token` автоматически
-5. После успешного OIDC-релиза удалить secret `PYPI_API_TOKEN` и отозвать токен на PyPI.
+В `release.yml` → job `publish` стоит `permissions: { id-token: write }`, action `pypa/gh-action-pypi-publish@release/v1` без `password:` — OIDC используется автоматически. Если понадобится добавить approval-gate, создай GitHub environment `pypi` и добавь в конфиг PyPI публишера и в workflow `environment: pypi`.
 
 ### Fallback: ручной релиз через токен
 
