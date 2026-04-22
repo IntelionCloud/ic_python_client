@@ -79,8 +79,11 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    # TODO: switch back to OIDC Trusted Publishing once PyPI project-level
-    # publisher is correctly configured. See CLAUDE.md "Trusted Publishing".
+    environment:
+      name: pypi
+      url: https://pypi.org/project/intelion-cloud/
+    permissions:
+      id-token: write  # required for OIDC Trusted Publishing
     steps:
       - name: Download built distributions
         uses: actions/download-artifact@v4
@@ -88,10 +91,8 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Publish to PyPI (API token fallback)
+      - name: Publish to PyPI (Trusted Publishing, OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
 
   github-release:
     name: Create GitHub Release

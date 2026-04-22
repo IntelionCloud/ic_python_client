@@ -253,13 +253,25 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
 ### Trusted Publishing: как настроено
 
-На https://pypi.org/manage/project/intelion-cloud/settings/publishing/ зарегистрирован publisher:
+На https://pypi.org/manage/project/intelion-cloud/settings/publishing/ (именно **project-level**, не profile) зарегистрирован publisher:
 - **Owner:** `IntelionCloud`
 - **Repository:** `ic_python_client`
 - **Workflow:** `release.yml`
-- **Environment:** пусто (без GitHub environment — не требуется прав на создание environment в PAT)
+- **Environment:** `pypi`
 
-В `release.yml` → job `publish` стоит `permissions: { id-token: write }`, action `pypa/gh-action-pypi-publish@release/v1` без `password:` — OIDC используется автоматически. Если понадобится добавить approval-gate, создай GitHub environment `pypi` и добавь в конфиг PyPI публишера и в workflow `environment: pypi`.
+На GitHub создан environment `pypi` (https://github.com/IntelionCloud/ic_python_client/settings/environments) — без required reviewers, просто держит имя для OIDC-claim. Если захочется manual approval перед публикацией, включи там required reviewers.
+
+В `release.yml` → job `publish`:
+```yaml
+environment:
+  name: pypi
+  url: https://pypi.org/project/intelion-cloud/
+permissions:
+  id-token: write
+steps:
+  - uses: pypa/gh-action-pypi-publish@release/v1
+```
+Никаких `password:`, `PYPI_API_TOKEN`, секретов — OIDC-токен выпускается GitHub'ом при выполнении job и обменивается на короткоживущий upload-токен PyPI.
 
 ### Fallback: ручной релиз через токен
 
