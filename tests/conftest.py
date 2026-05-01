@@ -128,6 +128,8 @@ SAMPLE_USAGE_ACT = {
     "cloud_server_uptime_seconds": 3600,
     "cloud_srv_price_rub_cents": 16071,
     "actual_cost_rub_cents": 16071,
+    "spent_amount_rub_cents": 16071,
+    "refund_amount_rub_cents": 0,
     "next_payment": {
         "period_price_rub_cents": 16071,
         "periods_to_pay": 1,

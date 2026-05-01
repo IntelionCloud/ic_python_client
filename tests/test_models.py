@@ -123,8 +123,18 @@ class TestUsageAct:
         assert act.id == 100
         assert act.user_config_id == 42
         assert act.cloud_server_uptime_seconds == 3600
+        assert act.spent_amount_rub_cents == 16071
+        assert act.refund_amount_rub_cents == 0
         assert act.next_payment is not None
         assert act.next_payment.amount_rub_cents == 16071
+
+    def test_spent_refund_default_when_missing(self):
+        # Backward compat: older API responses don't include the new fields.
+        payload = {k: v for k, v in SAMPLE_USAGE_ACT.items()
+                   if k not in ("spent_amount_rub_cents", "refund_amount_rub_cents")}
+        act = UsageAct.from_dict(payload)
+        assert act.spent_amount_rub_cents == 0
+        assert act.refund_amount_rub_cents == 0
 
 
 class TestCloudServer:
