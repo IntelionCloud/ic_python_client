@@ -44,6 +44,8 @@ class UsageAct:
     cloud_server_uptime_seconds: int = 0
     cloud_srv_price_rub_cents: int = 0
     actual_cost_rub_cents: int = 0
+    spent_amount_rub_cents: int = 0
+    refund_amount_rub_cents: int = 0
     next_payment: Optional[DebtInfo] = None
 
     @classmethod
@@ -61,6 +63,8 @@ class UsageAct:
             cloud_server_uptime_seconds=data.get("cloud_server_uptime_seconds", 0),
             cloud_srv_price_rub_cents=data.get("cloud_srv_price_rub_cents", 0),
             actual_cost_rub_cents=data.get("actual_cost_rub_cents", 0),
+            spent_amount_rub_cents=data.get("spent_amount_rub_cents", 0),
+            refund_amount_rub_cents=data.get("refund_amount_rub_cents", 0),
             next_payment=_parse_nested(data, "next_payment", DebtInfo),
         )
 
