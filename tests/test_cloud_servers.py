@@ -191,6 +191,16 @@ class TestCloudServersActions:
         client.close()
 
     @respx.mock(base_url=API_URL)
+    def test_reinstall_os(self, respx_mock):
+        respx_mock.post("cloud-servers/42/reinstall-os/").respond(
+            200, json=SAMPLE_CLOUD_SERVER
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.reinstall_os(42)
+        assert server.id == SAMPLE_CLOUD_SERVER["id"]
+        client.close()
+
+    @respx.mock(base_url=API_URL)
     def test_start_with_auto_renewal(self, respx_mock):
         respx_mock.post("cloud-servers/42/actions/").respond(
             200, json=SAMPLE_CLOUD_SERVER
