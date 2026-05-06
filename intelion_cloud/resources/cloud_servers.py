@@ -137,6 +137,17 @@ class CloudServers(SyncResource):
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
 
+    def reinstall_os(self, server_id: int) -> CloudServer:
+        """Reinstall the OS on a server, wiping the boot disk.
+
+        All data on the boot disk is destroyed. The current monthly billing
+        cycle is preserved (the open UsageAct is reused). A new IP and root
+        password are generated and become available in the user panel a few
+        minutes after the call returns.
+        """
+        data = self._post(f"{_PATH}{server_id}/reinstall-os/")
+        return CloudServer.from_dict(data)
+
     # --- Info endpoints ---
 
     def get_status(self, server_id: int) -> ServerStatus:
@@ -262,6 +273,11 @@ class AsyncCloudServers(AsyncResource):
 
     async def delete(self, server_id: int) -> CloudServer:
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
+        return CloudServer.from_dict(data)
+
+    async def reinstall_os(self, server_id: int) -> CloudServer:
+        """Reinstall the OS on a server, wiping the boot disk."""
+        data = await self._post(f"{_PATH}{server_id}/reinstall-os/")
         return CloudServer.from_dict(data)
 
     async def get_status(self, server_id: int) -> ServerStatus:
