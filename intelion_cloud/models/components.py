@@ -204,6 +204,8 @@ class OSImage:
     ssh_enabled: bool = False
     rdp_enabled: bool = False
     compatible_flavor_ids: Optional[List[int]] = None
+    cuda_version: Optional[str] = None
+    """CUDA version bundled in the image (e.g. ``"13.3"``); ``None`` if not applicable."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> OSImage:
@@ -215,4 +217,5 @@ class OSImage:
             ssh_enabled=data.get("ssh_enabled", False),
             rdp_enabled=data.get("rdp_enabled", False),
             compatible_flavor_ids=data.get("compatible_flavor_ids"),
+            cuda_version=_get(data, "cuda_version"),
         )

@@ -6,7 +6,7 @@ Standalone Python-клиент для REST API Intelion Cloud (`/api/v2/`). Не
 
 - **Python 3.9+**, единственная runtime-зависимость — `httpx>=0.24`
 - **Dev:** pytest + pytest-asyncio + respx
-- **Сборка:** setuptools (pyproject.toml), пакет `intelion-cloud`, версия 0.1.0
+- **Сборка:** setuptools (pyproject.toml), пакет `intelion-cloud` (версию смотреть в `pyproject.toml`, не дублировать её здесь — разъезжается)
 
 ## Структура
 
@@ -24,7 +24,7 @@ ic_python_client/
 │   ├── models/
 │   │   ├── _base.py        # _get(), _parse_nested(), _parse_nested_list()
 │   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage
-│   │   ├── flavors.py      # Flavor
+│   │   ├── flavors.py      # Flavor, FlavorSubstitution
 │   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer, SoftwareAddonInstance
 │   │   └── users.py        # User
 │   └── resources/
@@ -135,7 +135,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**53 теста**, все проходят в Docker.
+**67 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -193,6 +193,9 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **`migrate()` payload**: `{flavor_id (int), price_plan}`. CPU/RAM/GPU тоже из флейвора.
 - **OSImage.compatible_flavor_ids** — список совместимых FlavorConfig. Пустой список = универсальный образ. (Раньше было `compatible_gpu_ids` — переименовано на сервере.)
 - **Фильтры OSImages**: `flavor_id` (точно) или `gpu_id` (через flavor.gpu_id). Без фильтра — только универсальные образы.
+- **`queue_disabled` + `suggested_alternative`** (есть и у `Flavor`, и у `CloudServer`) — карта в долгосрочной аренде, очередь на неё сервер отбивает **409**. `suggested_alternative` (модель `FlavorSubstitution`) заполняется ТОЛЬКО когда `queue_disabled` И `max_available == 0`; при наличии ёмкости там `None` — сервер не гоняет подбор замены зря. Поле `exact_match=False` значит, что точного эквивалента по cpu/ram на карте-замене нет и подобран ближайший.
+- **`CloudServer.password_rotation`** (модель `PasswordRotation`) — свершившийся факт ротации root-пароля (инцидент 2026-07-29). Статус `PENDING` наружу не отдаётся принципиально, наружу приходит только `rotated`/`failed`. `acknowledged` живёт на сервере, а не в клиенте.
+- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса
 

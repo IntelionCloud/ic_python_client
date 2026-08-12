@@ -7,6 +7,30 @@ from typing import Any, Dict, List, Optional
 
 from ._base import _get, _parse_nested, _parse_nested_list
 from .components import CPU, GPU, OSImage, RAM, SSD
+from .flavors import FlavorSubstitution
+
+
+@dataclass(frozen=True)
+class PasswordRotation:
+    """Root password rotation notice for a server.
+
+    Present only as an accomplished fact: a pending rotation is deliberately
+    not exposed by the API. ``acknowledged`` is kept server-side so the notice
+    is not shown again from a different client.
+    """
+
+    status: str
+    """``"rotated"`` or ``"failed"``."""
+    rotated_at: Optional[str] = None
+    acknowledged: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PasswordRotation:
+        return cls(
+            status=data.get("status", ""),
+            rotated_at=_get(data, "rotated_at"),
+            acknowledged=data.get("acknowledged", False),
+        )
 
 
 @dataclass(frozen=True)
@@ -188,6 +212,14 @@ class CloudServer:
     total_network_disk_size: int = 0
     total_local_disk_size: int = 0
     max_available: int = 0
+    queue_disabled: bool = False
+    """This server's GPU is leased out long-term — queueing for it is refused."""
+    suggested_alternative: Optional[FlavorSubstitution] = None
+    """Replacement card offered when ``queue_disabled`` and capacity is zero."""
+    password_rotation: Optional[PasswordRotation] = None
+    """Set when the root password was rotated (or the rotation failed)."""
+    maintenance_reason: Optional[str] = None
+    """Customer-facing maintenance reason; ``None`` means the default wording."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CloudServer:
@@ -231,6 +263,12 @@ class CloudServer:
             total_network_disk_size=data.get("total_network_disk_size", 0),
             total_local_disk_size=data.get("total_local_disk_size", 0),
             max_available=data.get("max_available", 0),
+            queue_disabled=bool(data.get("queue_disabled", False)),
+            suggested_alternative=_parse_nested(
+                data, "suggested_alternative", FlavorSubstitution
+            ),
+            password_rotation=_parse_nested(data, "password_rotation", PasswordRotation),
+            maintenance_reason=_get(data, "maintenance_reason"),
         )
 
 

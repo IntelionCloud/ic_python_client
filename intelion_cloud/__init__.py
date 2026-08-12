@@ -27,11 +27,13 @@ from .models import (
     CPU,
     GPU,
     OSImage,
+    PasswordRotation,
     RAM,
     SSD,
     CloudServer,
     DebtInfo,
     Flavor,
+    FlavorSubstitution,
     PhysicalServer,
     Promocode,
     ServerStatus,
@@ -41,7 +43,7 @@ from .models import (
     WhiteIP,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Clients
@@ -51,12 +53,14 @@ __all__ = [
     "CloudServer",
     "ServerStatus",
     "Flavor",
+    "FlavorSubstitution",
     "User",
     "GPU",
     "CPU",
     "RAM",
     "SSD",
     "OSImage",
+    "PasswordRotation",
     "UsageAct",
     "DebtInfo",
     "Promocode",
