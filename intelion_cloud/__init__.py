@@ -30,6 +30,8 @@ from .models import (
     PasswordRotation,
     RAM,
     SSD,
+    SSHKey,
+    SoftwareAddon,
     CloudServer,
     DebtInfo,
     Flavor,
@@ -43,7 +45,7 @@ from .models import (
     WhiteIP,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     # Clients
@@ -59,6 +61,8 @@ __all__ = [
     "CPU",
     "RAM",
     "SSD",
+    "SSHKey",
+    "SoftwareAddon",
     "OSImage",
     "PasswordRotation",
     "UsageAct",

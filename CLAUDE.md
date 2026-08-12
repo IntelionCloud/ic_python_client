@@ -23,14 +23,17 @@ ic_python_client/
 │   ├── exceptions.py       # Иерархия ошибок (APIError → Auth/Forbidden/NotFound/...)
 │   ├── models/
 │   │   ├── _base.py        # _get(), _parse_nested(), _parse_nested_list()
-│   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage
+│   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage, SoftwareAddon
 │   │   ├── flavors.py      # Flavor, FlavorSubstitution
+│   │   ├── ssh_keys.py     # SSHKey
 │   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer, SoftwareAddonInstance
 │   │   └── users.py        # User
 │   └── resources/
 │       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация)
 │       ├── cloud_servers.py# CloudServers / AsyncCloudServers
+│       ├── catalog.py      # GPUs / CPUs / RAMs / SSDs / SoftwareAddons (+Async)
 │       ├── flavors.py      # Flavors / AsyncFlavors
+│       ├── ssh_keys.py     # SSHKeys / AsyncSSHKeys
 │       ├── os_images.py    # OSImages / AsyncOSImages
 │       └── users.py        # Users / AsyncUsers
 └── tests/
@@ -132,10 +135,15 @@ IntelionCloudError (base)
 | **Users** | `me()` | GET `users/` | Текущий пользователь (первый в списке) |
 | | `get(id)` | GET `users/{id}/` | Пользователь по ID |
 | | `update(id, ...)` | PATCH `users/{id}/` | Обновить профиль |
+| **SSHKeys** | `list()` | GET `ssh-keys/` | Ключи аккаунта. ⚠️ Голый массив, не DRF-конверт — `page` тут нет |
+| | `create(public_key, name=)` | POST `ssh-keys/` | 400 — ключ невалиден/слабый RSA, 409 — такой fingerprint уже есть |
+| | `delete(id)` | DELETE `ssh-keys/{id}/` | 204; чужой ключ → 404 |
+| **GPUs/CPUs/RAMs/SSDs** | `list(page=)`, `get(id)` | GET `gpus/`, `cpus/`, `ram/`, `ssds/` | Каталог, `PageNumberPagination` |
+| **SoftwareAddons** | `list()`, `get(id)` | GET `software-addons/` | ⚠️ `LimitOffsetPagination` — `page` НЕ поддерживается |
 
 ## Тесты
 
-**67 тестов**, все проходят в Docker.
+**86 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -195,6 +203,8 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **Фильтры OSImages**: `flavor_id` (точно) или `gpu_id` (через flavor.gpu_id). Без фильтра — только универсальные образы.
 - **`queue_disabled` + `suggested_alternative`** (есть и у `Flavor`, и у `CloudServer`) — карта в долгосрочной аренде, очередь на неё сервер отбивает **409**. `suggested_alternative` (модель `FlavorSubstitution`) заполняется ТОЛЬКО когда `queue_disabled` И `max_available == 0`; при наличии ёмкости там `None` — сервер не гоняет подбор замены зря. Поле `exact_match=False` значит, что точного эквивалента по cpu/ram на карте-замене нет и подобран ближайший.
 - **`CloudServer.password_rotation`** (модель `PasswordRotation`) — свершившийся факт ротации root-пароля (инцидент 2026-07-29). Статус `PENDING` наружу не отдаётся принципиально, наружу приходит только `rotated`/`failed`. `acknowledged` живёт на сервере, а не в клиенте.
+- **⚠️ Две РАЗНЫЕ пагинации в одном API.** Каталог железа (`gpus/`, `cpus/`, `ram/`, `ssds/`) — `PageNumberPagination` (`?page=N`), а `software-addons/` — `LimitOffsetPagination` (`?limit=&offset=`). DRF молча игнорирует `?page=N` на limit/offset-эндпоинте и отдаёт первую страницу — то есть ошибка выглядит как «данные есть, просто не те». Поэтому у `SoftwareAddons.list()` параметра `page` нет вовсе, а auto-paginate везде идёт по URL из `next`, а не конструирует параметры сам.
+- **⚠️ `ssh-keys/` — не ViewSet.** Обычный `APIView`: GET отдаёт голый JSON-массив без `{count, next, previous, results}`. `parse_paginated()` такой ответ переварит, но `page`-аргумента у ресурса нет и быть не может. Плюс rate limit 30/мин на юзера → `RateLimitError`.
 - **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса

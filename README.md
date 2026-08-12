@@ -72,6 +72,9 @@ with IntelionCloud(token="...") as client:
 | `client.flavors` | `list()` |
 | `client.os_images` | `list(flavor_id=, gpu_id=)` |
 | `client.users` | `me()`, `get()`, `update()` |
+| `client.ssh_keys` | `list()`, `create(public_key, name=)`, `delete(key_id)` |
+| `client.gpus` / `client.cpus` / `client.ram` / `client.ssds` | `list(page=)`, `get(id)` |
+| `client.software_addons` | `list()`, `get(id)` |
 
 ## Authentication
 

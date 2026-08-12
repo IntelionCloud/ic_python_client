@@ -1,6 +1,6 @@
 """Data models for the Intelion Cloud API."""
 
-from .components import CPU, GPU, OSImage, RAM, SSD
+from .components import CPU, GPU, OSImage, RAM, SSD, SoftwareAddon
 from .flavors import Flavor, FlavorSubstitution
 from .servers import (
     CloudServer,
@@ -13,6 +13,7 @@ from .servers import (
     UsageAct,
     WhiteIP,
 )
+from .ssh_keys import SSHKey
 from .users import User
 
 __all__ = [
@@ -21,6 +22,8 @@ __all__ = [
     "RAM",
     "SSD",
     "OSImage",
+    "SoftwareAddon",
+    "SSHKey",
     "Flavor",
     "FlavorSubstitution",
     "CloudServer",

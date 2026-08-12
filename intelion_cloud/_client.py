@@ -7,8 +7,21 @@ from typing import Optional
 from .constants import DEFAULT_BASE_URL, DEFAULT_CONNECT_TIMEOUT, DEFAULT_TIMEOUT
 from ._transport import AsyncTransport, SyncTransport
 from .resources.cloud_servers import AsyncCloudServers, CloudServers
+from .resources.catalog import (
+    AsyncCPUs,
+    AsyncGPUs,
+    AsyncRAMs,
+    AsyncSoftwareAddons,
+    AsyncSSDs,
+    CPUs,
+    GPUs,
+    RAMs,
+    SoftwareAddons,
+    SSDs,
+)
 from .resources.flavors import AsyncFlavors, Flavors
 from .resources.os_images import AsyncOSImages, OSImages
+from .resources.ssh_keys import AsyncSSHKeys, SSHKeys
 from .resources.users import AsyncUsers, Users
 
 
@@ -51,6 +64,12 @@ class IntelionCloud:
         self.flavors = Flavors(self._transport)
         self.os_images = OSImages(self._transport)
         self.users = Users(self._transport)
+        self.ssh_keys = SSHKeys(self._transport)
+        self.gpus = GPUs(self._transport)
+        self.cpus = CPUs(self._transport)
+        self.ram = RAMs(self._transport)
+        self.ssds = SSDs(self._transport)
+        self.software_addons = SoftwareAddons(self._transport)
 
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""
@@ -96,6 +115,12 @@ class AsyncIntelionCloud:
         self.flavors = AsyncFlavors(self._transport)
         self.os_images = AsyncOSImages(self._transport)
         self.users = AsyncUsers(self._transport)
+        self.ssh_keys = AsyncSSHKeys(self._transport)
+        self.gpus = AsyncGPUs(self._transport)
+        self.cpus = AsyncCPUs(self._transport)
+        self.ram = AsyncRAMs(self._transport)
+        self.ssds = AsyncSSDs(self._transport)
+        self.software_addons = AsyncSoftwareAddons(self._transport)
 
     async def close(self) -> None:
         """Close the underlying async HTTP connection pool."""

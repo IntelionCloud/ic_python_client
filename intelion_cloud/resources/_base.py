@@ -36,6 +36,10 @@ class SyncResource:
         response = self._transport.request("PATCH", path, json=json)
         return response.json()
 
+    def _delete(self, path: str) -> None:
+        """DELETE returning no body (204). Errors are raised by the transport."""
+        self._transport.request("DELETE", path)
+
     def _list_all(
         self,
         path: str,
@@ -106,6 +110,10 @@ class AsyncResource:
     async def _patch(self, path: str, *, json: Dict[str, Any]) -> Any:
         response = await self._transport.request("PATCH", path, json=json)
         return response.json()
+
+    async def _delete(self, path: str) -> None:
+        """DELETE returning no body (204). Errors are raised by the transport."""
+        await self._transport.request("DELETE", path)
 
     async def _list_all(
         self,
