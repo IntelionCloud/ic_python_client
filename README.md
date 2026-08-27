@@ -75,6 +75,31 @@ with IntelionCloud(token="...") as client:
 | `client.ssh_keys` | `list()`, `create(public_key, name=)`, `delete(key_id)` |
 | `client.gpus` / `client.cpus` / `client.ram` / `client.ssds` | `list(page=)`, `get(id)` |
 | `client.software_addons` | `list()`, `get(id)` |
+| `client.inference_api_keys` | `list()`, `get()`, `create()`, `update()`, `revoke()`, `rotate()`, `usage()`, `usage_range()`, `usage_range_csv()`, `models()`, `access_status()`, `request_access()` |
+
+## AI API keys
+
+Keys for LLM inference (`https://aiapi.intelion.cloud/v1/...`) — **not** the
+same thing as your main `token` above, which authenticates every call in
+this SDK. AI API is self-serve, gated on account balance:
+
+```python
+status = client.inference_api_keys.access_status()
+if not status.granted:
+    print(f"Не хватает {status.shortfall_rub_cents / 100:.2f} ₽")
+    client.inference_api_keys.request_access()  # raises PaymentRequiredError if still short
+
+key = client.inference_api_keys.create(name="prod-agent", rate_limit_rpm=60)
+print(key.api_key)  # raw value — shown ONLY here, persist it now
+
+usage = client.inference_api_keys.usage_range(date_from="2026-05-01", date_to="2026-05-31")
+print(usage.total_rub_cents)  # reconciles with «История операций» for the same range
+
+# Replace the key's value without losing its usage history; the old value
+# keeps working for grace_period_hours (default 24, 0 = retire immediately).
+rotated = client.inference_api_keys.rotate(key.key_hash, grace_period_hours=24)
+print(rotated.new_key.api_key)
+```
 
 ## Authentication
 
@@ -85,7 +110,7 @@ Get your API token from the [Intelion Cloud dashboard](https://intelion.cloud). 
 ```python
 from intelion_cloud import (
     AuthenticationError, NotFoundError, ConflictError,
-    RateLimitError, ValidationError, ServerError,
+    RateLimitError, ValidationError, ServerError, PaymentRequiredError,
 )
 
 try:

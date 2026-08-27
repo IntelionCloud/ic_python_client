@@ -6,6 +6,7 @@ __all__ = [
     "IntelionCloudError",
     "APIError",
     "AuthenticationError",
+    "PaymentRequiredError",
     "ForbiddenError",
     "NotFoundError",
     "ConflictError",
@@ -42,8 +43,21 @@ class AuthenticationError(APIError):
     """401 Unauthorized — invalid or missing API token."""
 
 
+class PaymentRequiredError(APIError):
+    """402 Payment Required — AI API self-serve gate not open yet.
+
+    Raised by ``inference_api_keys.request_access()``. ``response_body``
+    carries ``shortfall_rub_cents`` — how much more balance is needed.
+    """
+
+
 class ForbiddenError(APIError):
-    """403 Forbidden — insufficient permissions."""
+    """403 Forbidden — insufficient permissions.
+
+    For AI API endpoints specifically, ``response_body`` may carry a
+    machine-readable gate: ``{"code": "aiapi_access_not_granted", "how_to",
+    "threshold_rub_cents"}`` — see ``inference_api_keys.access_status()``.
+    """
 
 
 class NotFoundError(APIError):

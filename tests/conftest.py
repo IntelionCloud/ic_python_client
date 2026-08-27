@@ -178,6 +178,27 @@ SAMPLE_CLOUD_SERVER = {
     "max_available": 5,
 }
 
+SAMPLE_INFERENCE_API_KEY = {
+    "id": "a" * 64,
+    "key_hash": "a" * 64,
+    "name": "prod-agent",
+    "prefix": "ic-aaaaaa",
+    "rate_limit_rpm": 60,
+    "is_active": True,
+    "disabled_reason": "",
+    "credit_limit_rub_cents": None,
+    "spent_rub_cents": 0,
+    "free_tokens_consumed": 0,
+    "limit_reset_period": "",
+    "allowed_models": None,
+    "compaction_enabled": True,
+    "residency": "",
+    "expires_at": None,
+    "created_at": "2026-05-01T00:00:00+00:00",
+    "last_used_at": None,
+    "last_request_ip": None,
+}
+
 SAMPLE_USER = {
     "id": 7,
     "username": "testuser",

@@ -16,6 +16,7 @@ from .exceptions import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    PaymentRequiredError,
     RateLimitError,
     ServerError,
     ValidationError,
@@ -61,6 +62,11 @@ def _raise_for_status(response: httpx.Response) -> None:
         )
     if status == 401:
         raise AuthenticationError(message, status_code=status, response_body=body)
+    if status == 402:
+        # AI API self-serve gate (inference_api_keys.request_access) — body
+        # carries shortfall_rub_cents. A dedicated type so callers don't have
+        # to string-match a generic APIError to show "top up N ₽".
+        raise PaymentRequiredError(message, status_code=status, response_body=body)
     if status == 403:
         raise ForbiddenError(message, status_code=status, response_body=body)
     if status == 404:
@@ -148,7 +154,12 @@ class SyncTransport:
         *,
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
     ) -> httpx.Response:
+        """``headers`` are merged on top of the client-level defaults (httpx
+        behaviour) — used for ``Accept: text/csv`` on
+        ``inference_api_keys.usage_range_csv()``, whose response the
+        client-wide ``Accept: application/json`` would otherwise 406 on."""
         attempt = 0
         while True:
             start = time.monotonic()
@@ -158,6 +169,7 @@ class SyncTransport:
                     path,
                     json=json,
                     params=params,
+                    headers=headers,
                 )
                 duration = time.monotonic() - start
                 logger.debug(
@@ -257,6 +269,7 @@ class AsyncTransport:
         *,
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
     ) -> httpx.Response:
         import asyncio
 
@@ -269,6 +282,7 @@ class AsyncTransport:
                     path,
                     json=json,
                     params=params,
+                    headers=headers,
                 )
                 duration = time.monotonic() - start
                 logger.debug(

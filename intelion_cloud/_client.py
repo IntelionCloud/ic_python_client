@@ -20,6 +20,7 @@ from .resources.catalog import (
     SSDs,
 )
 from .resources.flavors import AsyncFlavors, Flavors
+from .resources.inference_api_keys import AsyncInferenceApiKeys, InferenceApiKeys
 from .resources.os_images import AsyncOSImages, OSImages
 from .resources.ssh_keys import AsyncSSHKeys, SSHKeys
 from .resources.users import AsyncUsers, Users
@@ -70,6 +71,7 @@ class IntelionCloud:
         self.ram = RAMs(self._transport)
         self.ssds = SSDs(self._transport)
         self.software_addons = SoftwareAddons(self._transport)
+        self.inference_api_keys = InferenceApiKeys(self._transport)
 
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""
@@ -121,6 +123,7 @@ class AsyncIntelionCloud:
         self.ram = AsyncRAMs(self._transport)
         self.ssds = AsyncSSDs(self._transport)
         self.software_addons = AsyncSoftwareAddons(self._transport)
+        self.inference_api_keys = AsyncInferenceApiKeys(self._transport)
 
     async def close(self) -> None:
         """Close the underlying async HTTP connection pool."""

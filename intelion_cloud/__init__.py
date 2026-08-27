@@ -19,6 +19,7 @@ from .exceptions import (
     ForbiddenError,
     IntelionCloudError,
     NotFoundError,
+    PaymentRequiredError,
     RateLimitError,
     ServerError,
     ValidationError,
@@ -36,8 +37,16 @@ from .models import (
     DebtInfo,
     Flavor,
     FlavorSubstitution,
+    InferenceApiAccessStatus,
+    InferenceApiKey,
+    InferenceApiKeyUsage,
+    InferenceApiTopModel,
+    InferenceApiUsageRange,
+    InferenceApiUsageRangeRow,
+    InferenceApiUsageWindow,
     PhysicalServer,
     Promocode,
+    RotatedInferenceApiKey,
     ServerStatus,
     SoftwareAddonInstance,
     UsageAct,
@@ -45,7 +54,7 @@ from .models import (
     WhiteIP,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     # Clients
@@ -71,6 +80,14 @@ __all__ = [
     "WhiteIP",
     "PhysicalServer",
     "SoftwareAddonInstance",
+    "InferenceApiKey",
+    "RotatedInferenceApiKey",
+    "InferenceApiKeyUsage",
+    "InferenceApiUsageWindow",
+    "InferenceApiTopModel",
+    "InferenceApiAccessStatus",
+    "InferenceApiUsageRange",
+    "InferenceApiUsageRangeRow",
     # Constants
     "ServerStatusEnum",
     "ServerState",
@@ -80,6 +97,7 @@ __all__ = [
     "IntelionCloudError",
     "APIError",
     "AuthenticationError",
+    "PaymentRequiredError",
     "ForbiddenError",
     "NotFoundError",
     "ConflictError",

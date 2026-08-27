@@ -36,9 +36,22 @@ class SyncResource:
         response = self._transport.request("PATCH", path, json=json)
         return response.json()
 
-    def _delete(self, path: str) -> None:
-        """DELETE returning no body (204). Errors are raised by the transport."""
-        self._transport.request("DELETE", path)
+    def _delete(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
+        """DELETE. Returns the parsed body if the response carries one (some
+        endpoints return a partial-failure summary instead of a bare 204),
+        else None."""
+        response = self._transport.request("DELETE", path, params=params)
+        if response.status_code == 204 or not response.content:
+            return None
+        return response.json()
+
+    def _get_text(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> str:
+        """Raw text body — ``format=csv`` responses aren't JSON, so ``_get``
+        (which calls ``.json()``) can't be used for them."""
+        response = self._transport.request(
+            "GET", path, params=params, headers={"Accept": "text/csv"},
+        )
+        return response.text
 
     def _list_all(
         self,
@@ -111,9 +124,18 @@ class AsyncResource:
         response = await self._transport.request("PATCH", path, json=json)
         return response.json()
 
-    async def _delete(self, path: str) -> None:
-        """DELETE returning no body (204). Errors are raised by the transport."""
-        await self._transport.request("DELETE", path)
+    async def _delete(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> Any:
+        """DELETE. Returns the parsed body if the response carries one, else None."""
+        response = await self._transport.request("DELETE", path, params=params)
+        if response.status_code == 204 or not response.content:
+            return None
+        return response.json()
+
+    async def _get_text(self, path: str, *, params: Optional[Dict[str, Any]] = None) -> str:
+        response = await self._transport.request(
+            "GET", path, params=params, headers={"Accept": "text/csv"},
+        )
+        return response.text
 
     async def _list_all(
         self,

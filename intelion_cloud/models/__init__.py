@@ -2,6 +2,16 @@
 
 from .components import CPU, GPU, OSImage, RAM, SSD, SoftwareAddon
 from .flavors import Flavor, FlavorSubstitution
+from .inference_api_keys import (
+    InferenceApiAccessStatus,
+    InferenceApiKey,
+    InferenceApiKeyUsage,
+    InferenceApiTopModel,
+    InferenceApiUsageRange,
+    InferenceApiUsageRangeRow,
+    InferenceApiUsageWindow,
+    RotatedInferenceApiKey,
+)
 from .servers import (
     CloudServer,
     DebtInfo,
@@ -36,4 +46,12 @@ __all__ = [
     "UsageAct",
     "WhiteIP",
     "User",
+    "InferenceApiKey",
+    "RotatedInferenceApiKey",
+    "InferenceApiKeyUsage",
+    "InferenceApiUsageWindow",
+    "InferenceApiTopModel",
+    "InferenceApiAccessStatus",
+    "InferenceApiUsageRange",
+    "InferenceApiUsageRangeRow",
 ]

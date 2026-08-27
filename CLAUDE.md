@@ -27,15 +27,17 @@ ic_python_client/
 │   │   ├── flavors.py      # Flavor, FlavorSubstitution
 │   │   ├── ssh_keys.py     # SSHKey
 │   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer, SoftwareAddonInstance
-│   │   └── users.py        # User
+│   │   ├── users.py        # User
+│   │   └── inference_api_keys.py # InferenceApiKey, RotatedInferenceApiKey, InferenceApiKeyUsage, InferenceApiUsageRange, InferenceApiAccessStatus
 │   └── resources/
-│       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация)
+│       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация, _delete/_get_text)
 │       ├── cloud_servers.py# CloudServers / AsyncCloudServers
 │       ├── catalog.py      # GPUs / CPUs / RAMs / SSDs / SoftwareAddons (+Async)
 │       ├── flavors.py      # Flavors / AsyncFlavors
 │       ├── ssh_keys.py     # SSHKeys / AsyncSSHKeys
 │       ├── os_images.py    # OSImages / AsyncOSImages
-│       └── users.py        # Users / AsyncUsers
+│       ├── users.py        # Users / AsyncUsers
+│       └── inference_api_keys.py # InferenceApiKeys / AsyncInferenceApiKeys — AI API key CRUD + rotate + usage
 └── tests/
     ├── conftest.py         # Fixtures, SAMPLE_* данные
     ├── test_client.py      # Init, context manager, resources attached
@@ -43,7 +45,8 @@ ic_python_client/
     ├── test_models.py      # from_dict() для всех моделей
     ├── test_cloud_servers.py # CRUD, actions, pagination, clone, migrate
     ├── test_flavors.py     # list()
-    └── test_users.py       # me(), get(), update()
+    ├── test_users.py       # me(), get(), update()
+    └── test_inference_api_keys.py # AI API keys: CRUD, rotate, usage, usage_range(+csv), access gate
 ```
 
 ## Архитектура
