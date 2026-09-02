@@ -8,13 +8,20 @@ on:
 jobs:
   build:
     name: Build sdist and wheel
-    # No pre-release test job here (removed 2026-09-02): the self-hosted
-    # runner is currently down, and this repo's tag-then-release flow already
-    # requires tests green on the tagged commit before the tag is pushed
-    # (see CLAUDE.md Release process step 1) — re-running them here just
-    # duplicates that check on the same infra that's unavailable. test.yml
-    # still runs the full matrix on every push/PR to main independently.
-    runs-on: self-hosted
+    # No pre-release test job here (removed 2026-09-02): this repo's
+    # tag-then-release flow already requires tests green on the tagged
+    # commit before the tag is pushed (see CLAUDE.md Release process step 1)
+    # — re-running them here just duplicates that check. test.yml still runs
+    # the full matrix on every push/PR to main independently.
+    #
+    # runs-on switched self-hosted -> ubuntu-latest (2026-09-02, same day):
+    # the self-hosted runner was down and blocked every job here, not just
+    # tests — none of build/publish/github-release touch our internal
+    # network, so GitHub-hosted is a strict improvement (OIDC trusted
+    # publishing to PyPI is keyed on repo/workflow-path/environment, not
+    # runner type, so this doesn't affect the pypi.org Trusted Publisher
+    # config).
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +71,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/project/intelion-cloud/
@@ -83,7 +90,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: publish
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
