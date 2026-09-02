@@ -257,11 +257,15 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
    ```
 
 5. **Ждать CI.** GitHub Actions автоматически:
-   - Прогонит `pytest` на Python 3.12.
    - Соберёт `sdist + wheel`.
    - Проверит `twine check`.
    - Зальёт на PyPI через OIDC (job `publish`, environment `pypi`).
    - Создаст GitHub Release с авто-сгенерированным changelog'ом и приложит артефакты.
+
+   **Тесты в release.yml НЕ гоняются** (убрано 2026-09-02, self-hosted раннер
+   в моменте лежал) — релиз полагается на то, что тег ставится на коммит, где
+   `pytest` уже зелёный (см. шаг 1 выше). Полная матрица (3.9–3.13) всё равно
+   гоняется отдельно в `test.yml` на каждый push/PR в `main`, до тега.
 
    Прогресс: https://github.com/IntelionCloud/ic_python_client/actions
 
