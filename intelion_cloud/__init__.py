@@ -34,6 +34,8 @@ from .models import (
     SSHKey,
     SoftwareAddon,
     CloudServer,
+    ColdFreeWindow,
+    ColdStorage,
     DebtInfo,
     Flavor,
     FlavorSubstitution,
@@ -62,6 +64,8 @@ __all__ = [
     "AsyncIntelionCloud",
     # Models
     "CloudServer",
+    "ColdFreeWindow",
+    "ColdStorage",
     "ServerStatus",
     "Flavor",
     "FlavorSubstitution",

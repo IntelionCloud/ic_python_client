@@ -46,6 +46,13 @@ class ServerState(IntEnum):
     QUEUED = 500
     AWAITING_PASSWORD = 600
     MAINTENANCE = 700
+    CLEANUP_IN_PROGRESS = 800
+    REINSTALLING = 900
+    # On the way to cold storage; NOT yet in storage (``cold_storage`` is still None).
+    COLD_MOVING = 950
+    COLD_STORAGE = 1000
+    # Cold storage with zero balance: the volume is deleted at ``cold_grace_deadline``.
+    COLD_GRACE = 1100
 
 
 class PricePlan(IntEnum):

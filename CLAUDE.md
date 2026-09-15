@@ -112,7 +112,7 @@ IntelionCloudError (base)
 | Enum | Значения |
 |------|----------|
 | `ServerStatus` | ERROR=-4, DELETED=-3, REQUESTED=-2, PAUSED=-1, PAUSING=0, START=1, ACTIVE=2, PREPARING=3 |
-| `ServerState` | IDLE=0, STARTING=100, SHELVING=200, MIGRATING_*=301-304, CLONING=400, QUEUED=500, AWAITING_PASSWORD=600, MAINTENANCE=700 |
+| `ServerState` | IDLE=0, STARTING=100, SHELVING=200, MIGRATING_*=301-304, CLONING=400, QUEUED=500, AWAITING_PASSWORD=600, MAINTENANCE=700, CLEANUP_IN_PROGRESS=800, REINSTALLING=900, COLD_MOVING=950 (ещё НЕ в хранении), COLD_STORAGE=1000, COLD_GRACE=1100 |
 | `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
 | `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
 | `OSType` | WINDOWS="win", LINUX="lin" |
@@ -147,7 +147,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**127 тестов**, все проходят в Docker.
+**148 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -209,6 +209,20 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **`CloudServer.password_rotation`** (модель `PasswordRotation`) — свершившийся факт ротации root-пароля (инцидент 2026-07-29). Статус `PENDING` наружу не отдаётся принципиально, наружу приходит только `rotated`/`failed`. `acknowledged` живёт на сервере, а не в клиенте.
 - **⚠️ Две РАЗНЫЕ пагинации в одном API.** Каталог железа (`gpus/`, `cpus/`, `ram/`, `ssds/`) — `PageNumberPagination` (`?page=N`), а `software-addons/` — `LimitOffsetPagination` (`?limit=&offset=`). DRF молча игнорирует `?page=N` на limit/offset-эндпоинте и отдаёт первую страницу — то есть ошибка выглядит как «данные есть, просто не те». Поэтому у `SoftwareAddons.list()` параметра `page` нет вовсе, а auto-paginate везде идёт по URL из `next`, а не конструирует параметры сам.
 - **⚠️ `ssh-keys/` — не ViewSet.** Обычный `APIView`: GET отдаёт голый JSON-массив без `{count, next, previous, results}`. `parse_paginated()` такой ответ переварит, но `page`-аргумента у ресурса нет и быть не может. Плюс rate limit 30/мин на юзера → `RateLimitError`.
+- **Холодное хранение в `CloudServer` (DSD-013 / DSD-024, уже на `develop`).** 8 read-only полей `UserConfigurationSerializer`, у работающего сервера все `None`:
+
+  | Поле | Тип | Источник на сервере | Смысл |
+  |---|---|---|---|
+  | `cold_storage_since` | `Optional[str]` (ISO) | поле модели | когда ВМ ушла в холодное хранение |
+  | `cold_storage_planned_at` | `Optional[str]` (ISO) | `get_cold_storage_planned_at` | оценка, когда ВМ уедет в хранение (никогда в прошлом); `None` = не планируется |
+  | `days_idle` | `Optional[int]` | `get_days_idle` | полных суток простоя остановленной ВМ; `None` у работающей. `0` это значение, не «нет данных» |
+  | `cold_grace_deadline` | `Optional[str]` (ISO) | `get_cold_grace_deadline` | дедлайн удаления тома, только в `ServerState.COLD_GRACE` |
+  | `cold_storage` | `Optional[ColdStorage]` | `get_cold_storage` | `{act_id, started_at, storage_gb (str), monthly_price_rub_cents, accrued_debt_rub_cents, billed_until_dt}`; только в `COLD_STORAGE_STATES` (1000/1100) и только при открытом акте, иначе `None` |
+  | `cold_free` | `Optional[ColdFreeWindow]` | `get_cold_free` | `{free_until_dt, storage_gb (str или null), hour_price_rub_cents, month_price_rub_cents}`: бесплатное окно хранения диска остановленной ВМ. `free_until_dt` может быть в прошлом (окно кончилось, почасовой прогон ещё не дошёл) |
+  | `resume_usage_act` | `Optional[UsageAct]` | `get_resume_usage_act` | во что обойдётся возобновление холодной ВМ (`UsageActShortSerializer`, та же модель, что `usage_act`); у холодной ВМ `usage_act` при этом `None`, mock-акт для неё не строится |
+  | `migration_error` | `Optional[str]` | поле модели | текст последней ошибки миграции после исчерпанных автопопыток (NoValidHost); причина зависшего IDLE |
+
+  `storage_gb` в обоих блоках приходит СТРОКОЙ (`Decimal(10,3)`), в клиенте так и остаётся: объём только показывается, во float не переводить. `cold_free` и `cold_storage` взаимоисключающие блоки «до» и «после» одной формы. Цены и долг считает бэк, в клиенте их не пересчитывать.
 - **Срок аренды в `CloudServer` (реформа тарифов, MIAN-414/415, серверная ветка `feature/pricing-plans-revision`).** 16 read-only полей `UserConfigurationSerializer`, все на модели `CloudServer` с нейтральными дефолтами для старого сервера (`0` / `None` / `False` / `""`):
 
   | Поле | Тип | Источник на сервере | Смысл |
@@ -232,7 +246,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
   Флаги `is_*` / `*_pending` / `*_available` и `term_state` это готовый ответ сервера, в клиенте их из дат не пересчитывать: на сервере эти правила уже трижды разъезжались, когда их считали в двух местах.
 - **`update(id, is_auto_renewal=False)` под подтверждённым сроком → 400 `ValidationError`** (`validate_is_auto_renewal` на сервере, ключ `field_errors["is_auto_renewal"]`). Пока `is_bound_by_term` истинно, автопродление не выключается: аренда прекращается через «прекратить аренду» в ЛК. Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
-- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
+- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса
 

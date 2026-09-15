@@ -4,10 +4,16 @@ import httpx
 import pytest
 import respx
 
-from intelion_cloud import IntelionCloud, TermState, ValidationError
+from intelion_cloud import IntelionCloud, ServerState, TermState, ValidationError
 from intelion_cloud._pagination import PaginatedResponse
 
-from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER, SAMPLE_TERM_SERVER
+from .conftest import (
+    API_URL,
+    BASE_URL,
+    SAMPLE_CLOUD_SERVER,
+    SAMPLE_COLD_SERVER,
+    SAMPLE_TERM_SERVER,
+)
 
 
 class TestCloudServersList:
@@ -105,6 +111,22 @@ class TestCloudServersGet:
         assert server.is_bound_by_term is True
         assert server.is_renewal_mandatory is True
         assert server.billing_cycle_months == 1
+        client.close()
+
+    @respx.mock(base_url=API_URL)
+    def test_get_server_in_cold_storage(self, respx_mock):
+        """GET of a cold server: storage block, resume price and no fake running act."""
+        respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_COLD_SERVER)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.get(42)
+        assert server.server_state == ServerState.COLD_STORAGE
+        assert server.cold_storage is not None
+        assert server.cold_storage.storage_gb == "50.000"
+        assert server.cold_storage.accrued_debt_rub_cents == 2333
+        assert server.resume_usage_act is not None
+        assert server.resume_usage_act.next_payment.amount_rub_cents == 16071
+        assert server.usage_act is None
+        assert server.cold_free is None
         client.close()
 
 

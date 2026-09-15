@@ -166,6 +166,62 @@ class SoftwareAddonInstance:
 
 
 @dataclass(frozen=True)
+class ColdStorage:
+    """Current cold-storage parameters of a server whose compute was released.
+
+    ``None`` on any server that is not in cold storage. Also ``None`` on a cold
+    server without an open cold-storage act (a server-side inconsistency the API
+    deliberately does not paper over with invented numbers).
+    """
+
+    act_id: int
+    started_at: Optional[str] = None
+    storage_gb: Optional[str] = None
+    """Volume size as a decimal string (``"50.000"``), kept as a string to avoid float drift."""
+    monthly_price_rub_cents: int = 0
+    accrued_debt_rub_cents: int = 0
+    """Storage debt accumulated so far, live value at the moment of the request."""
+    billed_until_dt: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ColdStorage:
+        return cls(
+            act_id=data.get("act_id", 0) or 0,
+            started_at=_get(data, "started_at"),
+            storage_gb=_get(data, "storage_gb"),
+            monthly_price_rub_cents=data.get("monthly_price_rub_cents", 0) or 0,
+            accrued_debt_rub_cents=data.get("accrued_debt_rub_cents", 0) or 0,
+            billed_until_dt=_get(data, "billed_until_dt"),
+        )
+
+
+@dataclass(frozen=True)
+class ColdFreeWindow:
+    """Free storage window of a stopped server: until when, and the price after.
+
+    ``None`` when the window does not apply. ``free_until_dt`` may already be
+    in the past: the window is over and the hourly billing run has not caught
+    up yet, so show "free storage ended, billing starts within the hour", not
+    a negative countdown.
+    """
+
+    free_until_dt: Optional[str] = None
+    storage_gb: Optional[str] = None
+    """Boot volume size as a decimal string; ``None`` when it cannot be determined."""
+    hour_price_rub_cents: int = 0
+    month_price_rub_cents: int = 0
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ColdFreeWindow:
+        return cls(
+            free_until_dt=_get(data, "free_until_dt"),
+            storage_gb=_get(data, "storage_gb"),
+            hour_price_rub_cents=data.get("hour_price_rub_cents", 0) or 0,
+            month_price_rub_cents=data.get("month_price_rub_cents", 0) or 0,
+        )
+
+
+@dataclass(frozen=True)
 class CloudServer:
     """A cloud (or dedicated) server configuration.
 
@@ -220,6 +276,31 @@ class CloudServer:
     """Set when the root password was rotated (or the rotation failed)."""
     maintenance_reason: Optional[str] = None
     """Customer-facing maintenance reason; ``None`` means the default wording."""
+    migration_error: Optional[str] = None
+    """Last migration error text; set when automatic start attempts were exhausted, else ``None``."""
+
+    # --- Cold storage (DSD-013 / DSD-024) ---
+    #
+    # A stopped server keeps its boot volume for free for a while, then the
+    # compute is released and the volume is billed as cold storage; with a zero
+    # balance a grace period starts after which the volume is deleted. The two
+    # nested blocks are mutually exclusive views "before" (``cold_free``) and
+    # "after" (``cold_storage``) of the same shape; both are ``None`` for a
+    # running server.
+    cold_storage_since: Optional[str] = None
+    """ISO datetime when the server entered cold storage; ``None`` otherwise."""
+    cold_storage_planned_at: Optional[str] = None
+    """Estimated ISO datetime of the move to cold storage (never in the past); ``None`` if not planned."""
+    days_idle: Optional[int] = None
+    """Full days the stopped server has been idle; ``None`` for a running server."""
+    cold_grace_deadline: Optional[str] = None
+    """ISO deadline after which the volume is deleted; only in ``ServerState.COLD_GRACE``."""
+    cold_storage: Optional[ColdStorage] = None
+    """Current storage parameters; only while in cold storage."""
+    cold_free: Optional[ColdFreeWindow] = None
+    """Free storage window of a stopped server; ``None`` when not applicable."""
+    resume_usage_act: Optional[UsageAct] = None
+    """What resuming this cold server would cost (unsaved act at the current plan); only for cold servers."""
 
     # --- Rental term (pricing-plans revision, MIAN-414/415) ---
     #
@@ -310,6 +391,14 @@ class CloudServer:
             ),
             password_rotation=_parse_nested(data, "password_rotation", PasswordRotation),
             maintenance_reason=_get(data, "maintenance_reason"),
+            migration_error=_get(data, "migration_error"),
+            cold_storage_since=_get(data, "cold_storage_since"),
+            cold_storage_planned_at=_get(data, "cold_storage_planned_at"),
+            days_idle=_get(data, "days_idle"),
+            cold_grace_deadline=_get(data, "cold_grace_deadline"),
+            cold_storage=_parse_nested(data, "cold_storage", ColdStorage),
+            cold_free=_parse_nested(data, "cold_free", ColdFreeWindow),
+            resume_usage_act=_parse_nested(data, "resume_usage_act", UsageAct),
             term_months=data.get("term_months", 0) or 0,
             term_discount_percent=data.get("term_discount_percent", 0) or 0,
             term_started_at=_get(data, "term_started_at"),

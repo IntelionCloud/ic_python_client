@@ -176,6 +176,15 @@ SAMPLE_CLOUD_SERVER = {
     "total_network_disk_size": 1024,
     "total_local_disk_size": 0,
     "max_available": 5,
+    "migration_error": None,
+    # Cold storage (DSD-013): a running server, nothing planned.
+    "cold_storage_since": None,
+    "cold_storage_planned_at": None,
+    "days_idle": None,
+    "cold_grace_deadline": None,
+    "cold_storage": None,
+    "cold_free": None,
+    "resume_usage_act": None,
     # Rental term (pricing-plans revision). An hourly server: no commitment.
     "term_months": 0,
     "term_discount_percent": 0,
@@ -193,6 +202,48 @@ SAMPLE_CLOUD_SERVER = {
     "term_renewal_available": False,
     "term_renewal_pending": False,
     "billing_cycle_months": 1,
+}
+
+# The same server stopped 9 days ago, still inside the free storage window:
+# the API says when the free window ends and what the volume will cost after.
+SAMPLE_STOPPED_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "status": -1,
+    "server_state": 0,
+    "has_instance": True,
+    "usage_act": None,
+    "days_idle": 9,
+    "cold_storage_planned_at": "2026-09-20T12:00:00+03:00",
+    "cold_free": {
+        "free_until_dt": "2026-09-20T12:00:00+03:00",
+        "storage_gb": "50.000",
+        "hour_price_rub_cents": 7,
+        "month_price_rub_cents": 5000,
+    },
+}
+
+# The same server in cold storage with an open cold-storage act; resuming it
+# would open the usage act below (server-side price, never computed client-side).
+SAMPLE_COLD_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "status": -1,
+    "server_state": 1000,
+    "has_instance": False,
+    "usage_act": None,
+    "cold_storage_since": "2026-09-01T12:00:00+03:00",
+    "cold_storage_planned_at": None,
+    "days_idle": 30,
+    "cold_grace_deadline": None,
+    "cold_storage": {
+        "act_id": 777,
+        "started_at": "2026-09-01T12:00:00+03:00",
+        "storage_gb": "50.000",
+        "monthly_price_rub_cents": 5000,
+        "accrued_debt_rub_cents": 2333,
+        "billed_until_dt": "2026-09-15T12:00:00+03:00",
+    },
+    "cold_free": None,
+    "resume_usage_act": SAMPLE_USAGE_ACT,
 }
 
 # The same server on a confirmed 12-month term: what the API returns for a

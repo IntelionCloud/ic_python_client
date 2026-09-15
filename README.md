@@ -101,6 +101,25 @@ rotated = client.inference_api_keys.rotate(key.key_hash, grace_period_hours=24)
 print(rotated.new_key.api_key)
 ```
 
+## Cold storage
+
+A stopped server keeps its boot volume for free for a while (`cold_free` says
+until when and at what price after), then the compute is released and the
+volume is billed as cold storage (`cold_storage`). Both blocks are `None` on a
+running server; `resume_usage_act` is the server-side price of resuming a cold
+server.
+
+```python
+from intelion_cloud import ServerState
+
+server = client.cloud_servers.get(42)
+if server.server_state in (ServerState.COLD_STORAGE, ServerState.COLD_GRACE):
+    print(f"{server.cold_storage.storage_gb} GB, debt {server.cold_storage.accrued_debt_rub_cents} kopecks")
+    print(f"resume costs {server.resume_usage_act.next_payment.amount_rub_cents} kopecks")
+elif server.cold_free:
+    print(f"free storage until {server.cold_free.free_until_dt}")
+```
+
 ## Rental term
 
 Servers on a term plan (`price_plan` 3, 6 or 12 months) carry a read-only

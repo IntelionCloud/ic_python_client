@@ -14,6 +14,8 @@ from .inference_api_keys import (
 )
 from .servers import (
     CloudServer,
+    ColdFreeWindow,
+    ColdStorage,
     DebtInfo,
     PhysicalServer,
     PasswordRotation,
@@ -37,6 +39,8 @@ __all__ = [
     "Flavor",
     "FlavorSubstitution",
     "CloudServer",
+    "ColdFreeWindow",
+    "ColdStorage",
     "DebtInfo",
     "PhysicalServer",
     "PasswordRotation",
