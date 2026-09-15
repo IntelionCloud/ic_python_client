@@ -101,6 +101,16 @@ rotated = client.inference_api_keys.rotate(key.key_hash, grace_period_hours=24)
 print(rotated.new_key.api_key)
 ```
 
+## Usage act costs
+
+Every usage act (`server.usage_act`, `last_usage_act`, `last_finished_usage_act`,
+`resume_usage_act`) carries server-computed costs in kopecks: `next_charge_rub_cents`
+(the next debit), `full_period_cost_rub_cents` (current period incl. prepay) and
+`full_planned_cost_rub_cents` (stand-alone price of the planned period, the number
+to show in a "confirm start" dialog), plus the act's own `discount_percent` and the
+applied `promocode_code` / `promocode_discount_value`. Do not recompute them
+client-side.
+
 ## Cold storage
 
 A stopped server keeps its boot volume for free for a while (`cold_free` says

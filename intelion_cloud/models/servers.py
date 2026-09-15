@@ -71,6 +71,25 @@ class UsageAct:
     spent_amount_rub_cents: int = 0
     refund_amount_rub_cents: int = 0
     next_payment: Optional[DebtInfo] = None
+    next_charge_rub_cents: int = 0
+    """What the next charge will take from the balance (held-up money), kopecks."""
+    full_period_cost_rub_cents: int = 0
+    """Full cost of the current period including prepay, kopecks; depends on payment state."""
+    full_planned_cost_rub_cents: int = 0
+    """Stand-alone price of the planned period: unit price x ``periods_planned``, kopecks.
+
+    Unlike ``full_period_cost_rub_cents`` it does not depend on what was already
+    paid or on the balance. This is the number shown in "confirm start" /
+    "stop server" dialogs. Do not multiply it by the term length client-side:
+    ``periods_planned`` already equals the billing cycle (1 month for companies,
+    the whole term for individuals).
+    """
+    discount_percent: int = 0
+    """Discount snapshot of this act, whole percent; the only source of the percent for this act."""
+    promocode_code: Optional[str] = None
+    """Code of the promocode applied to this act, ``None`` if none."""
+    promocode_discount_value: Optional[int] = None
+    """Percent of a percentage promocode; ``None`` for no promocode or a fixed-amount one."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> UsageAct:
@@ -90,6 +109,12 @@ class UsageAct:
             spent_amount_rub_cents=data.get("spent_amount_rub_cents", 0),
             refund_amount_rub_cents=data.get("refund_amount_rub_cents", 0),
             next_payment=_parse_nested(data, "next_payment", DebtInfo),
+            next_charge_rub_cents=data.get("next_charge_rub_cents", 0) or 0,
+            full_period_cost_rub_cents=data.get("full_period_cost_rub_cents", 0) or 0,
+            full_planned_cost_rub_cents=data.get("full_planned_cost_rub_cents", 0) or 0,
+            discount_percent=data.get("discount_percent", 0) or 0,
+            promocode_code=_get(data, "promocode_code"),
+            promocode_discount_value=_get(data, "promocode_discount_value"),
         )
 
 

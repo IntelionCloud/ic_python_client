@@ -13,6 +13,7 @@ from .conftest import (
     SAMPLE_CLOUD_SERVER,
     SAMPLE_COLD_SERVER,
     SAMPLE_TERM_SERVER,
+    SAMPLE_TERM_USAGE_ACT,
 )
 
 
@@ -127,6 +128,22 @@ class TestCloudServersGet:
         assert server.resume_usage_act.next_payment.amount_rub_cents == 16071
         assert server.usage_act is None
         assert server.cold_free is None
+        client.close()
+
+    @respx.mock(base_url=API_URL)
+    def test_get_server_usage_act_cost_fields(self, respx_mock):
+        """The act inside a server response carries the cost / discount / promocode fields."""
+        respx_mock.get("cloud-servers/42/").respond(
+            200, json={**SAMPLE_TERM_SERVER, "usage_act": SAMPLE_TERM_USAGE_ACT}
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.get(42)
+        act = server.usage_act
+        assert act.full_planned_cost_rub_cents == 6318000
+        assert act.next_charge_rub_cents == 6318000
+        assert act.discount_percent == server.term_discount_percent == 35
+        assert act.promocode_code == "WELCOME10"
+        assert act.promocode_discount_value == 10
         client.close()
 
 

@@ -136,6 +136,37 @@ SAMPLE_USAGE_ACT = {
         "amount_rub_cents": 16071,
         "period_end_dt": "2025-01-01T01:00:00Z",
     },
+    "next_charge_rub_cents": 16071,
+    "full_period_cost_rub_cents": 16071,
+    "full_planned_cost_rub_cents": 16071,
+    "discount_percent": 0,
+    "promocode_code": None,
+    "promocode_discount_value": None,
+}
+
+# A monthly act on a 12-month plan for a company: one month frozen at a time,
+# 35% term discount snapshot, a 10% percentage promocode on top.
+SAMPLE_TERM_USAGE_ACT = {
+    **SAMPLE_USAGE_ACT,
+    "id": 101,
+    "period": 30,
+    "periods_planned": 1,
+    "monthly_price_rub": "63180.00",
+    "cloud_srv_price_rub_cents": 6318000,
+    "actual_cost_rub_cents": 0,
+    "spent_amount_rub_cents": 0,
+    "next_payment": {
+        "period_price_rub_cents": 6318000,
+        "periods_to_pay": 1,
+        "amount_rub_cents": 6318000,
+        "period_end_dt": "2026-10-01T00:00:00+03:00",
+    },
+    "next_charge_rub_cents": 6318000,
+    "full_period_cost_rub_cents": 6318000,
+    "full_planned_cost_rub_cents": 6318000,
+    "discount_percent": 35,
+    "promocode_code": "WELCOME10",
+    "promocode_discount_value": 10,
 }
 
 SAMPLE_CLOUD_SERVER = {

@@ -147,7 +147,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**148 тестов**, все проходят в Docker.
+**160 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -193,7 +193,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 | `Flavor` | `FlavorConfigSerializer` (servers) |
 | `GPU/CPU/RAM/SSD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
 | `User` | `ICUserSerializer` (user_panel) |
-| `UsageAct` | `UsageActSerializer` (user_panel) |
+| `UsageAct` | `UsageActShortSerializer` (user_panel; вложен в `usage_act`, `last_usage_act`, `last_finished_usage_act`, `resume_usage_act`) |
 | `OSImage` | `OSImageSerializer` (servers) |
 
 **Ключевое отличие:** `CloudServer.flavor_oid` — cloud vs dedicated discriminator (NULL = dedicated). Совпадает с `UserConfiguration.flavor_oid` на сервере.
@@ -209,6 +209,17 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **`CloudServer.password_rotation`** (модель `PasswordRotation`) — свершившийся факт ротации root-пароля (инцидент 2026-07-29). Статус `PENDING` наружу не отдаётся принципиально, наружу приходит только `rotated`/`failed`. `acknowledged` живёт на сервере, а не в клиенте.
 - **⚠️ Две РАЗНЫЕ пагинации в одном API.** Каталог железа (`gpus/`, `cpus/`, `ram/`, `ssds/`) — `PageNumberPagination` (`?page=N`), а `software-addons/` — `LimitOffsetPagination` (`?limit=&offset=`). DRF молча игнорирует `?page=N` на limit/offset-эндпоинте и отдаёт первую страницу — то есть ошибка выглядит как «данные есть, просто не те». Поэтому у `SoftwareAddons.list()` параметра `page` нет вовсе, а auto-paginate везде идёт по URL из `next`, а не конструирует параметры сам.
 - **⚠️ `ssh-keys/` — не ViewSet.** Обычный `APIView`: GET отдаёт голый JSON-массив без `{count, next, previous, results}`. `parse_paginated()` такой ответ переварит, но `page`-аргумента у ресурса нет и быть не может. Плюс rate limit 30/мин на юзера → `RateLimitError`.
+- **Стоимость и скидка в `UsageAct` (`UsageActShortSerializer`, уже на `develop`).** 6 полей, которые SDK молча терял; все четыре денежных это `int` в копейках, считает бэк, в клиенте не пересчитывать:
+
+  | Поле | Тип | Источник на сервере | Смысл |
+  |---|---|---|---|
+  | `next_charge_rub_cents` | `int`, дефолт 0 | `mround(get_held_up_money())` | сколько спишется ближайшим списанием (удержанные деньги) |
+  | `full_period_cost_rub_cents` | `int`, дефолт 0 | `get_debt_info(include_prepay=True)[2]` | полная стоимость текущего периода с предоплатой; зависит от `was_fully_payed` и баланса |
+  | `full_planned_cost_rub_cents` | `int`, дефолт 0 | `unit_price × periods_planned` | stand-alone цена запланированного периода для модалок «Подтвердите запуск» / «Остановка». Мультипликатор ровно один: `periods_planned` (ЮЛ/ИП 1, физлицо весь срок), на `term_months` НЕ домножать |
+  | `discount_percent` | `int`, дефолт 0 | поле модели | снимок скидки ЭТОГО акта; единственный источник процента для акта (не `CloudServer.term_discount_percent` и не глобальный справочник) |
+  | `promocode_code` | `Optional[str]` | `get_promocode_code` | код применённого промокода или `None` |
+  | `promocode_discount_value` | `Optional[int]` | `get_promocode_discount_value` | процент, только для процентного промокода; для фиксированного (в рублях) `None` при заполненном `promocode_code` |
+
 - **Холодное хранение в `CloudServer` (DSD-013 / DSD-024, уже на `develop`).** 8 read-only полей `UserConfigurationSerializer`, у работающего сервера все `None`:
 
   | Поле | Тип | Источник на сервере | Смысл |
@@ -246,7 +257,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
   Флаги `is_*` / `*_pending` / `*_available` и `term_state` это готовый ответ сервера, в клиенте их из дат не пересчитывать: на сервере эти правила уже трижды разъезжались, когда их считали в двух местах.
 - **`update(id, is_auto_renewal=False)` под подтверждённым сроком → 400 `ValidationError`** (`validate_is_auto_renewal` на сервере, ключ `field_errors["is_auto_renewal"]`). Пока `is_bound_by_term` истинно, автопродление не выключается: аренда прекращается через «прекратить аренду» в ЛК. Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
-- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
+- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Из полей `UsageAct`: `next_charge_rub_cents`, `full_period_cost_rub_cents`, `full_planned_cost_rub_cents` (реально `int`), `promocode_code`, `promocode_discount_value` (реально nullable str / int). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса
 
