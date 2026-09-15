@@ -116,6 +116,7 @@ IntelionCloudError (base)
 | `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
 | `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
 | `OSType` | WINDOWS="win", LINUX="lin" |
+| `TermState` | NOT_TERM_PLAN="not_term_plan", ACTIVE="active", PENDING_CONSENT="pending_consent", GRANDFATHERED="grandfathered", LEGACY_EXPIRED="legacy_expired", CONFIRMED_EXPIRED="confirmed_expired" (строковые коды `CloudServer.term_state`, зеркало `user_panel.consts.TermState`) |
 
 ## API-эндпоинты
 
@@ -146,7 +147,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**86 тестов**, все проходят в Docker.
+**127 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -188,7 +189,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
 | Клиентская модель | DRF Serializer (серверный) |
 |---|---|
-| `CloudServer` | `CloudServerSerializer` (user_panel) |
+| `CloudServer` | `UserConfigurationSerializer` (user_panel; отдаётся `GET /api/v2/cloud-servers/`) |
 | `Flavor` | `FlavorConfigSerializer` (servers) |
 | `GPU/CPU/RAM/SSD` | `GPUSerializer`, `CPUSerializer`, etc. (servers) |
 | `User` | `ICUserSerializer` (user_panel) |
@@ -208,7 +209,30 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **`CloudServer.password_rotation`** (модель `PasswordRotation`) — свершившийся факт ротации root-пароля (инцидент 2026-07-29). Статус `PENDING` наружу не отдаётся принципиально, наружу приходит только `rotated`/`failed`. `acknowledged` живёт на сервере, а не в клиенте.
 - **⚠️ Две РАЗНЫЕ пагинации в одном API.** Каталог железа (`gpus/`, `cpus/`, `ram/`, `ssds/`) — `PageNumberPagination` (`?page=N`), а `software-addons/` — `LimitOffsetPagination` (`?limit=&offset=`). DRF молча игнорирует `?page=N` на limit/offset-эндпоинте и отдаёт первую страницу — то есть ошибка выглядит как «данные есть, просто не те». Поэтому у `SoftwareAddons.list()` параметра `page` нет вовсе, а auto-paginate везде идёт по URL из `next`, а не конструирует параметры сам.
 - **⚠️ `ssh-keys/` — не ViewSet.** Обычный `APIView`: GET отдаёт голый JSON-массив без `{count, next, previous, results}`. `parse_paginated()` такой ответ переварит, но `page`-аргумента у ресурса нет и быть не может. Плюс rate limit 30/мин на юзера → `RateLimitError`.
-- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
+- **Срок аренды в `CloudServer` (реформа тарифов, MIAN-414/415, серверная ветка `feature/pricing-plans-revision`).** 16 read-only полей `UserConfigurationSerializer`, все на модели `CloudServer` с нейтральными дефолтами для старого сервера (`0` / `None` / `False` / `""`):
+
+  | Поле | Тип | Источник на сервере | Смысл |
+  |---|---|---|---|
+  | `term_months` | `int`, дефолт 0 | поле модели | снимок обязательства в месяцах; 0 = обязательства нет |
+  | `term_discount_percent` | `int`, дефолт 0 | поле модели | снимок скидки за срок, целые проценты; правка справочника цен его не меняет |
+  | `term_started_at` | `Optional[str]` (ISO) | поле модели | начало срока, `None` до первого акта |
+  | `term_ends_at` | `Optional[str]` (ISO) | `get_term_ends_at` → `term_ends_at_effective()` | конец срока С УЧЁТОМ простоя по нашей вине, включая ещё не закрытый |
+  | `term_conditions_accepted_at` | `Optional[str]` (ISO) | поле модели | когда клиент принял условие о пересчёте при досрочном прекращении; не обнуляется после срока |
+  | `term_renewal_accepted_at` | `Optional[str]` (ISO) | поле модели | клиент нажал «продлить на тех же условиях»; новый срок стартует по истечении текущего |
+  | `term_outage_shift_hours` | `int`, дефолт 0 | property (`term_outage_shift_seconds // 3600`) | учтённый сдвиг конца срока за наш простой, часы вниз |
+  | `term_outage_active` | `bool` | property | прямо сейчас сервер лежит по нашей вине, конец срока уезжает |
+  | `term_state` | `str`, дефолт `""` | property | код из `TermState`; `""` = сервер до реформы, ничего не сказал. Неизвестный код НЕ подменять |
+  | `has_term_snapshot` | `bool` | property | снимок применим к текущему `price_plan` |
+  | `is_renewal_mandatory` | `bool` | property | срок идёт и подтверждён: автопродление не выключить |
+  | `is_bound_by_term` | `bool` | property | досрочное прекращение = пересчёт без скидки (включает `pending_consent`) |
+  | `requires_term_consent` | `bool` | `get_requires_term_consent` | перед запуском нужно собрать согласие; правило живёт на сервере, фронт/SDK его НЕ выводят из `price_plan` |
+  | `term_renewal_available` | `bool` | `get_term_renewal_available` | окно продления открыто, срок подтверждён, продление ещё не принято |
+  | `term_renewal_pending` | `bool` | property | продление принято и ждёт конца текущего срока |
+  | `billing_cycle_months` | `int`, дефолт 0 | property | сколько месяцев списывается за раз. Срочный тариф: ЮЛ/ИП 1, физлицо весь срок; почасовой 1; постоплата `abs(price_plan)`. Читать вместе с `server_full_rent_price_rub_cents` |
+
+  Флаги `is_*` / `*_pending` / `*_available` и `term_state` это готовый ответ сервера, в клиенте их из дат не пересчитывать: на сервере эти правила уже трижды разъезжались, когда их считали в двух местах.
+- **`update(id, is_auto_renewal=False)` под подтверждённым сроком → 400 `ValidationError`** (`validate_is_auto_renewal` на сервере, ключ `field_errors["is_auto_renewal"]`). Пока `is_bound_by_term` истинно, автопродление не выключается: аренда прекращается через «прекратить аренду» в ЛК. Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
+- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса
 

@@ -101,6 +101,27 @@ rotated = client.inference_api_keys.rotate(key.key_hash, grace_period_hours=24)
 print(rotated.new_key.api_key)
 ```
 
+## Rental term
+
+Servers on a term plan (`price_plan` 3, 6 or 12 months) carry a read-only
+snapshot of the commitment: `term_months`, `term_discount_percent`,
+`term_started_at`, `term_ends_at` (already shifted by any downtime on our side),
+`term_state` and the flags the server derives from them.
+
+```python
+from intelion_cloud import TermState
+
+server = client.cloud_servers.get(42)
+if server.term_state == TermState.ACTIVE:
+    print(f"{server.term_months} months at -{server.term_discount_percent}% until {server.term_ends_at}")
+if server.is_bound_by_term:
+    # PATCH is_auto_renewal=False is refused with 400 (ValidationError) until the term ends
+    ...
+```
+
+Consent, renewal and early termination are personal-account actions and are
+not part of API v2; the SDK only reads their state.
+
 ## Authentication
 
 Get your API token from the [Intelion Cloud dashboard](https://intelion.cloud). The client sends it as `Authorization: Token {token}`.

@@ -4,10 +4,10 @@ import httpx
 import pytest
 import respx
 
-from intelion_cloud import IntelionCloud
+from intelion_cloud import IntelionCloud, TermState, ValidationError
 from intelion_cloud._pagination import PaginatedResponse
 
-from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER
+from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER, SAMPLE_TERM_SERVER
 
 
 class TestCloudServersList:
@@ -92,6 +92,21 @@ class TestCloudServersGet:
         assert server.gpu.name == "NVIDIA H100"
         client.close()
 
+    @respx.mock(base_url=API_URL)
+    def test_get_server_on_confirmed_term(self, respx_mock):
+        """GET of a server bound by a 12-month term: the SDK exposes the whole term block."""
+        respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_TERM_SERVER)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.get(42)
+        assert server.term_state == TermState.ACTIVE
+        assert server.term_months == 12
+        assert server.term_discount_percent == 35
+        assert server.term_ends_at == "2027-09-01T05:00:00+03:00"
+        assert server.is_bound_by_term is True
+        assert server.is_renewal_mandatory is True
+        assert server.billing_cycle_months == 1
+        client.close()
+
 
 class TestCloudServersCreate:
     @respx.mock(base_url=API_URL)
@@ -135,6 +150,44 @@ class TestCloudServersUpdate:
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = client.cloud_servers.update(42, name="new-name")
         assert server.name == "new-name"
+        client.close()
+
+    @respx.mock(base_url=API_URL)
+    def test_update_auto_renewal_off_outside_term(self, respx_mock):
+        """Hourly server: switching auto-renewal off is an ordinary PATCH."""
+        respx_mock.patch("cloud-servers/42/").respond(
+            200, json={**SAMPLE_CLOUD_SERVER, "is_auto_renewal": False}
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.update(42, is_auto_renewal=False)
+        assert server.is_auto_renewal is False
+        assert server.is_bound_by_term is False
+        client.close()
+
+    @respx.mock(base_url=API_URL)
+    def test_update_auto_renewal_off_under_term_is_rejected(self, respx_mock):
+        """Server bound by a confirmed term answers 400 to ``is_auto_renewal=false``.
+
+        ``UserConfigurationSerializer.validate_is_auto_renewal`` on the server:
+        auto-renewal cannot be switched off before the term ends, the rental is
+        ended through the termination flow instead. The SDK surfaces it as
+        ``ValidationError`` with the field error, nothing is swallowed.
+        """
+        respx_mock.patch("cloud-servers/42/").respond(
+            400,
+            json={
+                "is_auto_renewal": [
+                    "Автопродление нельзя выключить до конца срока аренды: "
+                    "аренда прекращается через «прекратить аренду»."
+                ]
+            },
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(ValidationError) as exc_info:
+            client.cloud_servers.update(42, is_auto_renewal=False)
+        assert exc_info.value.status_code == 400
+        assert "is_auto_renewal" in exc_info.value.field_errors
+        assert respx_mock.calls.call_count == 1
         client.close()
 
 

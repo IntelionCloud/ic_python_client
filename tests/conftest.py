@@ -176,6 +176,46 @@ SAMPLE_CLOUD_SERVER = {
     "total_network_disk_size": 1024,
     "total_local_disk_size": 0,
     "max_available": 5,
+    # Rental term (pricing-plans revision). An hourly server: no commitment.
+    "term_months": 0,
+    "term_discount_percent": 0,
+    "term_started_at": None,
+    "term_ends_at": None,
+    "term_conditions_accepted_at": None,
+    "has_term_snapshot": False,
+    "is_renewal_mandatory": False,
+    "requires_term_consent": False,
+    "term_renewal_accepted_at": None,
+    "term_outage_shift_hours": 0,
+    "term_outage_active": False,
+    "term_state": "not_term_plan",
+    "is_bound_by_term": False,
+    "term_renewal_available": False,
+    "term_renewal_pending": False,
+    "billing_cycle_months": 1,
+}
+
+# The same server on a confirmed 12-month term: what the API returns for a
+# company that pays monthly and has one settled outage on our side.
+SAMPLE_TERM_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "price_plan": 12,
+    "term_months": 12,
+    "term_discount_percent": 35,
+    "term_started_at": "2026-09-01T00:00:00+03:00",
+    "term_ends_at": "2027-09-01T05:00:00+03:00",
+    "term_conditions_accepted_at": "2026-08-31T18:30:00+03:00",
+    "has_term_snapshot": True,
+    "is_renewal_mandatory": True,
+    "requires_term_consent": False,
+    "term_renewal_accepted_at": None,
+    "term_outage_shift_hours": 5,
+    "term_outage_active": False,
+    "term_state": "active",
+    "is_bound_by_term": True,
+    "term_renewal_available": False,
+    "term_renewal_pending": False,
+    "billing_cycle_months": 1,
 }
 
 SAMPLE_INFERENCE_API_KEY = {

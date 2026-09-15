@@ -8,6 +8,7 @@ __all__ = [
     "PricePlan",
     "BillingPeriod",
     "OSType",
+    "TermState",
     "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
     "DEFAULT_CONNECT_TIMEOUT",
@@ -72,3 +73,24 @@ class OSType:
 
     WINDOWS = "win"
     LINUX = "lin"
+
+
+class TermState:
+    """Rental-term state codes returned in ``CloudServer.term_state``.
+
+    Computed on the server from the ``term_*`` snapshot fields; branch on the
+    code, do not re-derive the state from the dates client-side.
+    """
+
+    NOT_TERM_PLAN = "not_term_plan"
+    """Hourly or postpaid plan: there is no commitment at all."""
+    ACTIVE = "active"
+    """The term is running and the snapshot applies to the current plan."""
+    PENDING_CONSENT = "pending_consent"
+    """Conditions accepted, snapshot written, dates not set yet: the first usage act starts the term."""
+    GRANDFATHERED = "grandfathered"
+    """Legacy configuration without dates and without consent; dates are filled on start, no gates."""
+    LEGACY_EXPIRED = "legacy_expired"
+    """Legacy term expired without consent: re-armed on start for the same length with its own discount."""
+    CONFIRMED_EXPIRED = "confirmed_expired"
+    """A confirmed term ended: no discount until a new consent is given."""

@@ -9,7 +9,7 @@ Usage::
 """
 
 from ._client import AsyncIntelionCloud, IntelionCloud
-from .constants import BillingPeriod, PricePlan, ServerState
+from .constants import BillingPeriod, PricePlan, ServerState, TermState
 from .constants import ServerStatus as ServerStatusEnum
 from .exceptions import (
     APIError,
@@ -93,6 +93,7 @@ __all__ = [
     "ServerState",
     "PricePlan",
     "BillingPeriod",
+    "TermState",
     # Exceptions
     "IntelionCloudError",
     "APIError",

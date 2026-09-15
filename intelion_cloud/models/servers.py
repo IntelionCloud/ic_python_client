@@ -221,6 +221,47 @@ class CloudServer:
     maintenance_reason: Optional[str] = None
     """Customer-facing maintenance reason; ``None`` means the default wording."""
 
+    # --- Rental term (pricing-plans revision, MIAN-414/415) ---
+    #
+    # All read-only on the server. The five ``term_*`` snapshot fields are a
+    # copy of the contract conditions taken when the term started, not a
+    # derivative of ``price_plan``: the plan can be changed later, the running
+    # term keeps its conditions. ``term_state`` and the ``is_*`` / ``*_pending``
+    # / ``*_available`` flags are the server's own classification of that
+    # snapshot; do not re-derive them client-side from the dates.
+    term_months: int = 0
+    """Commitment length in months; ``0`` means no commitment (hourly / postpaid)."""
+    term_discount_percent: int = 0
+    """Discount snapshot for the term, whole percent. Independent of the live price list."""
+    term_started_at: Optional[str] = None
+    """ISO datetime when the term started; ``None`` until the first usage act."""
+    term_ends_at: Optional[str] = None
+    """Effective end of the term, ISO datetime, already shifted by outages on our side."""
+    term_conditions_accepted_at: Optional[str] = None
+    """When the customer accepted the early-termination recalculation terms; ``None`` = never."""
+    has_term_snapshot: bool = False
+    """The snapshot above applies to the current ``price_plan``."""
+    is_renewal_mandatory: bool = False
+    """Term is running and was confirmed: auto-renewal cannot be switched off."""
+    requires_term_consent: bool = False
+    """Starting the server will open a new term, consent must be collected first."""
+    term_renewal_accepted_at: Optional[str] = None
+    """Customer clicked "renew on the same terms"; the new term starts when the current one ends."""
+    term_outage_shift_hours: int = 0
+    """Whole hours of downtime on our side already added to ``term_ends_at``."""
+    term_outage_active: bool = False
+    """The server is down on our side right now and ``term_ends_at`` keeps moving forward."""
+    term_state: str = ""
+    """One of :class:`intelion_cloud.constants.TermState`; ``""`` when the server predates the reform."""
+    is_bound_by_term: bool = False
+    """Stopping the rental early triggers recalculation without the term discount."""
+    term_renewal_available: bool = False
+    """The renewal window is open right now. Renewal itself is a personal-account action, not API v2."""
+    term_renewal_pending: bool = False
+    """A renewal was accepted and waits for the current term to end."""
+    billing_cycle_months: int = 0
+    """Months charged and frozen per payment: ``1`` for companies, the whole term for individuals."""
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CloudServer:
         return cls(
@@ -269,6 +310,22 @@ class CloudServer:
             ),
             password_rotation=_parse_nested(data, "password_rotation", PasswordRotation),
             maintenance_reason=_get(data, "maintenance_reason"),
+            term_months=data.get("term_months", 0) or 0,
+            term_discount_percent=data.get("term_discount_percent", 0) or 0,
+            term_started_at=_get(data, "term_started_at"),
+            term_ends_at=_get(data, "term_ends_at"),
+            term_conditions_accepted_at=_get(data, "term_conditions_accepted_at"),
+            has_term_snapshot=bool(data.get("has_term_snapshot", False)),
+            is_renewal_mandatory=bool(data.get("is_renewal_mandatory", False)),
+            requires_term_consent=bool(data.get("requires_term_consent", False)),
+            term_renewal_accepted_at=_get(data, "term_renewal_accepted_at"),
+            term_outage_shift_hours=data.get("term_outage_shift_hours", 0) or 0,
+            term_outage_active=bool(data.get("term_outage_active", False)),
+            term_state=data.get("term_state", "") or "",
+            is_bound_by_term=bool(data.get("is_bound_by_term", False)),
+            term_renewal_available=bool(data.get("term_renewal_available", False)),
+            term_renewal_pending=bool(data.get("term_renewal_pending", False)),
+            billing_cycle_months=data.get("billing_cycle_months", 0) or 0,
         )
 
 
