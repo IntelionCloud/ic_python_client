@@ -147,7 +147,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**160 тестов**, все проходят в Docker.
+**171 тест**, все проходят в Docker.
 
 ### Запуск
 
@@ -234,7 +234,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
   | `migration_error` | `Optional[str]` | поле модели | текст последней ошибки миграции после исчерпанных автопопыток (NoValidHost); причина зависшего IDLE |
 
   `storage_gb` в обоих блоках приходит СТРОКОЙ (`Decimal(10,3)`), в клиенте так и остаётся: объём только показывается, во float не переводить. `cold_free` и `cold_storage` взаимоисключающие блоки «до» и «после» одной формы. Цены и долг считает бэк, в клиенте их не пересчитывать.
-- **Срок аренды в `CloudServer` (реформа тарифов, MIAN-414/415, серверная ветка `feature/pricing-plans-revision`).** 16 read-only полей `UserConfigurationSerializer`, все на модели `CloudServer` с нейтральными дефолтами для старого сервера (`0` / `None` / `False` / `""`):
+- **Срок аренды в `CloudServer` (реформа тарифов, MIAN-414/415, серверная ветка `feature/pricing-plans-revision`).** 17 read-only полей `UserConfigurationSerializer`, все на модели `CloudServer` с нейтральными дефолтами для старого сервера (`0` / `None` / `False` / `""`):
 
   | Поле | Тип | Источник на сервере | Смысл |
   |---|---|---|---|
@@ -254,10 +254,12 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
   | `term_renewal_available` | `bool` | `get_term_renewal_available` | окно продления открыто, срок подтверждён, продление ещё не принято |
   | `term_renewal_pending` | `bool` | property | продление принято и ждёт конца текущего срока |
   | `billing_cycle_months` | `int`, дефолт 0 | property | сколько месяцев списывается за раз. Срочный тариф: ЮЛ/ИП 1, физлицо весь срок; почасовой 1; постоплата `abs(price_plan)`. Читать вместе с `server_full_rent_price_rub_cents` |
+  | `pays_term_monthly` | `bool`, дефолт `False` | property | владелец платит срок помесячно (`True`, ЮЛ/ИП с реквизитами) или внёс всю сумму вперёд (`False`, физлицо и ЮЛ/ИП без реквизитов). Внутри срока это СНИМОК типа клиента на дату согласия (`term_client_kind`, оферта п. 8.5), а не живой `legal`: ЮЛ, дозаполнившее ИНН внутри срока, условия не меняет. Снимка нет → сервер читает живой `ICUser.is_term_business`. Парный к `billing_cycle_months`: `True` ↔ 1, `False` ↔ весь срок |
 
   Флаги `is_*` / `*_pending` / `*_available` и `term_state` это готовый ответ сервера, в клиенте их из дат не пересчитывать: на сервере эти правила уже трижды разъезжались, когда их считали в двух местах.
+- **`User.is_term_business`** (`UserSerializer`, та же серверная ветка; `bool`, дефолт `False`). Бизнес-клиент для срочного тарифа по оферте п. 8.5: `legal` в `org`/`ip` **И** заполнены `company_name`, `inn`, `ogrn` (у ИП ОГРНИП). Одного `legal` мало: ЮЛ без ИНН считается физлицом, платит весь срок вперёд, и доплату с него не взыскать. Это ЖИВОЙ предикат по текущему профилю: он говорит, как будет оплачен НОВЫЙ срок; про идущий срок отвечает снимок `CloudServer.pays_term_monthly`. В клиенте не выводить из `legal` / `company_name` (`inn` и `ogrn` в API v2 вообще не отдаются): правило живёт на сервере, второй копии не заводить. Тесты: `TestIsTermBusiness` в `tests/test_term_fields.py`.
 - **`update(id, is_auto_renewal=False)` под подтверждённым сроком → 400 `ValidationError`** (`validate_is_auto_renewal` на сервере, ключ `field_errors["is_auto_renewal"]`). Пока `is_bound_by_term` истинно, автопродление не выключается: аренда прекращается через «прекратить аренду» в ЛК. Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
-- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Из полей `UsageAct`: `next_charge_rub_cents`, `full_period_cost_rub_cents`, `full_planned_cost_rub_cents` (реально `int`), `promocode_code`, `promocode_discount_value` (реально nullable str / int). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
+- **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). `pays_term_monthly` и `User.is_term_business` объявлены `BooleanField(read_only=True)`, в схеме они честные `boolean`. Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Из полей `UsageAct`: `next_charge_rub_cents`, `full_period_cost_rub_cents`, `full_planned_cost_rub_cents` (реально `int`), `promocode_code`, `promocode_discount_value` (реально nullable str / int). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
 ## Добавление нового ресурса
 

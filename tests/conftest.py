@@ -233,6 +233,7 @@ SAMPLE_CLOUD_SERVER = {
     "term_renewal_available": False,
     "term_renewal_pending": False,
     "billing_cycle_months": 1,
+    "pays_term_monthly": False,
 }
 
 # The same server stopped 9 days ago, still inside the free storage window:
@@ -298,6 +299,7 @@ SAMPLE_TERM_SERVER = {
     "term_renewal_available": False,
     "term_renewal_pending": False,
     "billing_cycle_months": 1,
+    "pays_term_monthly": True,
 }
 
 SAMPLE_INFERENCE_API_KEY = {
@@ -337,4 +339,6 @@ SAMPLE_USER = {
     "default_payment_type": "ACQUIRING_TYPE",
     "tg_id": True,
     "is_email_verified": True,
+    # Term plans (offer clause 8.5): an individual pays the whole term upfront.
+    "is_term_business": False,
 }

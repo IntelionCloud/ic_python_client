@@ -367,6 +367,16 @@ class CloudServer:
     """A renewal was accepted and waits for the current term to end."""
     billing_cycle_months: int = 0
     """Months charged and frozen per payment: ``1`` for companies, the whole term for individuals."""
+    pays_term_monthly: bool = False
+    """The owner pays the term month by month (``True``) or paid the whole term upfront (``False``).
+
+    Inside a running term this is a snapshot of the customer kind taken when the
+    term conditions were accepted (offer clause 8.5), not the live ``legal`` of
+    the profile: a company that fills in its INN mid-term keeps the conditions
+    it started with. Without a snapshot the server falls back to the live
+    :attr:`User.is_term_business`. Only companies and sole proprietors with
+    filled-in details pay monthly; individuals pay the whole term at once.
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CloudServer:
@@ -440,6 +450,7 @@ class CloudServer:
             term_renewal_available=bool(data.get("term_renewal_available", False)),
             term_renewal_pending=bool(data.get("term_renewal_pending", False)),
             billing_cycle_months=data.get("billing_cycle_months", 0) or 0,
+            pays_term_monthly=bool(data.get("pays_term_monthly", False)),
         )
 
 

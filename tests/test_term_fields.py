@@ -2,9 +2,13 @@
 
 Server-side source: ``UserConfigurationSerializer`` in
 ``website/user_panel/serializers.py`` (branch ``feature/pricing-plans-revision``),
-sixteen read-only fields: five ``term_*`` snapshot fields, the outage shift,
+seventeen read-only fields: five ``term_*`` snapshot fields, the outage shift,
 the server-computed ``term_state`` / ``is_*`` / ``*_pending`` / ``*_available``
-flags and ``billing_cycle_months``.
+flags, ``billing_cycle_months`` and ``pays_term_monthly``.
+
+``is_term_business`` (offer clause 8.5) lives on ``UserSerializer``, not on the
+server serializer, so it is tested here on :class:`User` (see
+``TestIsTermBusiness``).
 
 Shapes are asserted against the serializer, not the OpenAPI schema:
 ``term_ends_at``, ``requires_term_consent`` and ``term_renewal_available`` are
@@ -13,11 +17,12 @@ while they are a nullable datetime and two booleans.
 """
 
 import pytest
+import respx
 
-from intelion_cloud import TermState
-from intelion_cloud.models import CloudServer
+from intelion_cloud import IntelionCloud, TermState
+from intelion_cloud.models import CloudServer, User
 
-from .conftest import SAMPLE_CLOUD_SERVER, SAMPLE_TERM_SERVER
+from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER, SAMPLE_TERM_SERVER, SAMPLE_USER
 
 TERM_FIELDS = (
     "term_months",
@@ -36,6 +41,7 @@ TERM_FIELDS = (
     "term_renewal_available",
     "term_renewal_pending",
     "billing_cycle_months",
+    "pays_term_monthly",
 )
 
 
@@ -55,7 +61,7 @@ def _server(**extra):
 
 
 class TestTermFieldsPresent:
-    def test_all_sixteen_fields_are_read(self):
+    def test_all_seventeen_fields_are_read(self):
         """Every field the serializer emits lands on the model with the same value."""
         srv = CloudServer.from_dict(SAMPLE_TERM_SERVER)
         for name in TERM_FIELDS:
@@ -79,6 +85,8 @@ class TestTermFieldsPresent:
         assert srv.term_renewal_pending is False
         assert srv.term_renewal_available is False
         assert srv.billing_cycle_months == 1
+        # A company with filled-in details: monthly instalments inside the term
+        assert srv.pays_term_monthly is True
 
     def test_hourly_server_has_no_commitment(self):
         srv = CloudServer.from_dict(SAMPLE_CLOUD_SERVER)
@@ -92,6 +100,7 @@ class TestTermFieldsPresent:
         assert srv.is_renewal_mandatory is False
         # An hourly plan is still charged one month at a time
         assert srv.billing_cycle_months == 1
+        assert srv.pays_term_monthly is False
 
     def test_pending_consent_before_first_start(self):
         """Consent given, dates not set yet: the first usage act starts the term."""
@@ -137,9 +146,25 @@ class TestTermFieldsPresent:
         assert renewed.term_renewal_accepted_at == "2027-08-20T09:00:00+03:00"
 
     def test_individual_pays_the_whole_term_upfront(self):
-        srv = _server(term_months=12, billing_cycle_months=12)
+        srv = _server(term_months=12, billing_cycle_months=12, pays_term_monthly=False)
         assert srv.billing_cycle_months == 12
         assert srv.billing_cycle_months == srv.term_months
+        assert srv.pays_term_monthly is False
+
+    def test_company_pays_the_term_monthly(self):
+        """Offer clause 8.5: a company with details pays one month per cycle inside the term."""
+        srv = _server(term_months=12, billing_cycle_months=1, pays_term_monthly=True)
+        assert srv.pays_term_monthly is True
+        assert srv.billing_cycle_months == 1
+
+    def test_pays_term_monthly_is_the_snapshot_not_the_live_profile(self):
+        """The server decides from ``term_client_kind``; the client takes the answer verbatim.
+
+        A company that filled in its INN mid-term keeps the upfront conditions it
+        started with, so ``False`` next to a business-looking server is valid data.
+        """
+        srv = _server(term_months=12, billing_cycle_months=12, pays_term_monthly=False)
+        assert srv.pays_term_monthly is False
 
 
 class TestTermFieldsAbsentOrNull:
@@ -161,6 +186,8 @@ class TestTermFieldsAbsentOrNull:
         assert srv.term_renewal_available is False
         assert srv.term_renewal_pending is False
         assert srv.billing_cycle_months == 0
+        # Pre-reform server did not say: the safe reading is "paid upfront", like the server's own fallback
+        assert srv.pays_term_monthly is False
 
     def test_absent_term_state_is_empty_not_a_code(self):
         """No guessing: an old server did not say, so the client does not invent a state."""
@@ -209,6 +236,7 @@ class TestTermFieldsAbsentOrNull:
             "is_bound_by_term",
             "term_renewal_available",
             "term_renewal_pending",
+            "pays_term_monthly",
         ],
     )
     def test_boolean_flags_are_real_booleans(self, flag):
@@ -231,3 +259,55 @@ class TestTermStateConstants:
     def test_unknown_future_code_is_kept_verbatim(self):
         """The client must not swallow a state added on the server later."""
         assert _server(term_state="something_new").term_state == "something_new"
+
+
+class TestIsTermBusiness:
+    """``UserSerializer.is_term_business`` (offer clause 8.5) on :class:`User`.
+
+    Company or sole proprietor AND company name, INN and OGRN filled in. The
+    rule lives on the server (``ICUser.is_term_business``); the client must not
+    re-derive it from ``legal`` or ``company_name``.
+    """
+
+    def _user(self, **extra):
+        return User.from_dict({**SAMPLE_USER, **extra})
+
+    def test_present_in_sample_user(self):
+        assert User.from_dict(SAMPLE_USER).is_term_business is False
+
+    def test_business_with_details(self):
+        user = self._user(legal="ORG_TYPE", company_name="OOO Test", is_term_business=True)
+        assert user.is_term_business is True
+
+    def test_legal_alone_does_not_make_a_business(self):
+        """A company without an INN is an individual for the term plans; the client trusts the server."""
+        user = self._user(legal="ORG_TYPE", company_name="OOO Test", is_term_business=False)
+        assert user.is_term_business is False
+        assert user.legal == "ORG_TYPE"
+
+    def test_absent_in_old_server_payload_defaults_to_false(self):
+        data = {k: v for k, v in SAMPLE_USER.items() if k != "is_term_business"}
+        assert "is_term_business" not in data
+        assert User.from_dict(data).is_term_business is False
+
+    @pytest.mark.parametrize("raw, expected", [(None, False), (True, True), (False, False)])
+    def test_is_a_real_boolean(self, raw, expected):
+        """Null or a stringly-typed schema must not leak into ``if user.is_term_business:``."""
+        assert self._user(is_term_business=raw).is_term_business is expected
+
+    @respx.mock(base_url=API_URL)
+    def test_me_reads_the_flag_from_the_api(self, respx_mock):
+        respx_mock.get("users/").respond(
+            200,
+            json={
+                "count": 1,
+                "next": None,
+                "previous": None,
+                "results": [{**SAMPLE_USER, "is_term_business": True}],
+            },
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        try:
+            assert client.users.me().is_term_business is True
+        finally:
+            client.close()

@@ -39,6 +39,17 @@ class User:
     is_edo_connected: bool = False
     invalid_name: bool = False
     last_viewed_event: Optional[str] = None
+    is_term_business: bool = False
+    """Business customer for the term plans: a company or sole proprietor with filled-in details.
+
+    Offer clause 8.5: a customer that has not provided its company name, INN
+    and OGRN (OGRNIP) is treated as an individual. ``legal`` alone is not
+    enough; a company without an INN pays the whole term upfront exactly like
+    an individual. Read-only, computed on the server. This is the live
+    predicate: inside a running term the snapshot on the server wins, see
+    :attr:`CloudServer.pays_term_monthly`. ``False`` when the server predates
+    the pricing-plans revision.
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> User:
@@ -70,4 +81,5 @@ class User:
             is_edo_connected=data.get("is_edo_connected", False),
             invalid_name=data.get("invalid_name", False),
             last_viewed_event=_get(data, "last_viewed_event"),
+            is_term_business=bool(data.get("is_term_business", False)),
         )
