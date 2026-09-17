@@ -9,6 +9,7 @@ __all__ = [
     "BillingPeriod",
     "OSType",
     "TermState",
+    "ServerCreateRejectReason",
     "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
     "DEFAULT_CONNECT_TIMEOUT",
@@ -101,3 +102,21 @@ class TermState:
     """Legacy term expired without consent: re-armed on start for the same length with its own discount."""
     CONFIRMED_EXPIRED = "confirmed_expired"
     """A confirmed term ended: no discount until a new consent is given."""
+
+
+class ServerCreateRejectReason:
+    """Machine-readable labels in ``reason`` of ``POST cloud-servers/`` refusals.
+
+    Read them through :attr:`intelion_cloud.exceptions.APIError.reason`. Values
+    mirror ``user_panel.consts.ServerCreateRejectReason`` on the server
+    (MIAN-412); the key is additive next to ``detail``.
+    """
+
+    VALIDATION = "validation"
+    """The request did not pass serializer validation (400)."""
+    CPU_LIMIT = "cpu_limit"
+    """The account's limit of GPU-less servers is exhausted (400)."""
+    QUEUE_DISABLED = "queue_disabled"
+    """Queueing for this GPU is forbidden; ``suggested_alternative`` is offered (409)."""
+    INTERNAL_ERROR = "internal_error"
+    """The server logged an internal error while creating the configuration (500)."""

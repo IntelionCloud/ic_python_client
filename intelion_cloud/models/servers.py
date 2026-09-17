@@ -456,11 +456,29 @@ class CloudServer:
 
 @dataclass(frozen=True)
 class ServerStatus:
-    """Result of the pre-start status check endpoint."""
+    """Result of the pre-start status check endpoint.
+
+    Server-side source: ``retrieve_server_can_start`` in
+    ``website/user_panel/views/views.py``. Shapes are taken from the view, not
+    from the OpenAPI schema (the endpoint is a plain ``Response`` dict).
+    """
 
     can_start: bool
     affordable_runtime_seconds: Optional[int] = None
     message: Optional[str] = None
+    is_enough_money_for_full_period: Optional[bool] = None
+    """Whether the free balance covers the whole next billing period."""
+    remaining_monthly_seconds: Optional[int] = None
+    """Seconds left in the current billing cycle; 0 when no cycle is running."""
+    launch_required_rub_cents: Optional[int] = None
+    """Free balance required right now for the start to go through (kopecks).
+
+    The single server-side formula (``launch_required_funds_rub_cents``): the
+    remainder of the running cycle when one is open, the whole next act
+    otherwise, and 0 when an open act already covers the start (a server
+    powered off under a confirmed term). ``None`` when ``can_start`` is false:
+    the server does not compute it then, and ``0`` would read as "free".
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ServerStatus:
@@ -468,4 +486,11 @@ class ServerStatus:
             can_start=data.get("can_start", False),
             affordable_runtime_seconds=_get(data, "affordable_runtime_seconds"),
             message=_get(data, "message"),
+            is_enough_money_for_full_period=(
+                None
+                if _get(data, "is_enough_money_for_full_period") is None
+                else bool(_get(data, "is_enough_money_for_full_period"))
+            ),
+            remaining_monthly_seconds=_get(data, "remaining_monthly_seconds"),
+            launch_required_rub_cents=_get(data, "launch_required_rub_cents"),
         )

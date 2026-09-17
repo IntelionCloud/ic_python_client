@@ -35,6 +35,22 @@ class APIError(IntelionCloudError):
         self.response_body = response_body
         super().__init__(message)
 
+    @property
+    def reason(self) -> Optional[str]:
+        """Machine-readable rejection label, when the server sent one.
+
+        ``POST cloud-servers/`` puts ``reason`` next to ``detail`` in its 400
+        and 409 bodies (``ServerCreateRejectReason`` values: ``validation``,
+        ``cpu_limit``, ``queue_disabled``, ``internal_error``). Branch on this,
+        not on the Russian ``detail`` text, which changes with copywriting.
+        ``None`` for bodies without the key (DRF validation errors included).
+        """
+        if isinstance(self.response_body, dict):
+            value = self.response_body.get("reason")
+            if isinstance(value, str) and value:
+                return value
+        return None
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(status_code={self.status_code}, message={str(self)!r})"
 
