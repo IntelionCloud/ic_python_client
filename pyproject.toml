@@ -1,10 +1,11 @@
 [build-system]
 requires = ["setuptools>=64", "wheel"]
-build-backend = "setuptools.build_meta"
+build-backend = "ic_build_backend"
+backend-path = ["."]
 
 [project]
 name = "intelion-cloud"
-version = "0.6.0"
+version = "0.6.1"
 description = "Python client for the Intelion Cloud API"
 readme = "README.md"
 license = "MIT"
