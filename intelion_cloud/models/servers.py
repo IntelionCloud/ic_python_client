@@ -486,8 +486,10 @@ class ServerStatus:
     by an individual: own money only, balance minus frozen, WITHOUT the
     overdraft limit (Terms, cl. 8.5), so it can be negative. A term plan paid
     by a business (legal entity or sole proprietor per the client-kind
-    snapshot, see ``User.is_term_business``), and any server off a term: the
-    free balance including the overdraft limit. Compare the two fields as they come, do not
+    snapshot, see ``User.is_term_business``), a legacy term started before
+    term consents existed (no signed consent, ``term_conditions_accepted_at``
+    is empty), and any server off a term: the free balance including the
+    overdraft limit. Compare the two fields as they come, do not
     rebuild the sum from the profile: a second copy of the rule drifts from the
     gate. ``None`` when ``can_start`` is false or on an older server.
     """

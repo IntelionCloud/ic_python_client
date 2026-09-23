@@ -27,8 +27,10 @@ before that server change is in production: the fields below would be empty.
 ### Launch check
 
 - `ServerStatus.launch_funds_rub_cents`: the client's money the start gate
-  compares with `launch_required_rub_cents`. For an individual on a term plan
-  it excludes the overdraft limit and can be negative. `None` when the server
+  compares with `launch_required_rub_cents`. For an individual on a confirmed
+  term plan it excludes the overdraft limit and can be negative. A legacy term
+  without a signed consent (`term_conditions_accepted_at` is empty) still
+  launches on the free balance including the limit. `None` when the server
   cannot be started or on an older server.
 
 ### Earlier in this release
