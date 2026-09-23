@@ -216,6 +216,14 @@ class CloudServers(SyncResource):
         """Migrate a server to a different FlavorConfig and/or price plan.
 
         The server must be stopped before migration. CPU/RAM/GPU are fixed by the flavor.
+
+        A target price plan with a rental term (1, 3, 6 or 12 months) needs the
+        term conditions accepted in the web panel for this exact flavor and term
+        before the call. Otherwise the call fails with ``ConflictError`` (409),
+        ``error_code`` ``TERM_CONDITIONS_REQUIRED``, and nothing is changed. This
+        applies to a running server and, since 0.7.0, to a server that has not
+        been started yet (including one with conditions accepted for another
+        flavor or term).
         """
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,

@@ -21,6 +21,14 @@ before that server change is in production: the fields below would be empty.
   argument: the toggle stays as in the signed consent document, the call still
   succeeds. A start during a term renewal fails with `ConflictError`,
   `error_code` `TERM_RENEWAL_IN_PROGRESS`: retry in about a minute.
+- `cloud_servers.migrate(id, flavor_id=..., price_plan=...)` to a price plan
+  with a term (1, 3, 6 or 12 months) fails with `ConflictError` (409),
+  `error_code` `TERM_CONDITIONS_REQUIRED`, unless the term conditions were
+  accepted in the web panel for that exact flavor and term. A running server
+  already behaved this way; now the same applies to a server that has not been
+  started yet, including one whose accepted conditions are for another flavor
+  or term (before, the change went through and the 409 came on `start`).
+  Nothing is changed on refusal.
 - New `APIError.error_code` property and `TermConflictCode` constants to
   branch on these refusals instead of the Russian message.
 
