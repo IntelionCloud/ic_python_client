@@ -138,18 +138,25 @@ snapshot of the commitment: `term_months`, `term_discount_percent`,
 `term_state` and the flags the server derives from them.
 
 ```python
-from intelion_cloud import TermState
+from intelion_cloud import ConflictError, TermConflictCode, TermState
 
 server = client.cloud_servers.get(42)
 if server.term_state == TermState.ACTIVE:
     print(f"{server.term_months} months at -{server.term_discount_percent}% until {server.term_ends_at}")
-if server.is_bound_by_term:
-    # PATCH is_auto_renewal=False is refused with 400 (ValidationError) until the term ends
-    ...
+
+# Turning auto-renewal off is always allowed. Turning it on under a running
+# confirmed term extends the term and needs a signed consent: web panel only.
+try:
+    client.cloud_servers.update(42, is_auto_renewal=True)
+except ConflictError as e:
+    if e.error_code == TermConflictCode.AUTO_RENEWAL_CONSENT_REQUIRED:
+        print(e)  # the server's message for the user
 ```
 
-Consent, renewal and early termination are personal-account actions and are
-not part of API v2; the SDK only reads their state.
+Under a term `start(is_auto_renewal=...)` ignores the argument: the toggle stays
+as in the signed consent. Consent, renewal and early termination are
+personal-account actions and are not part of API v2; the SDK only reads their
+state.
 
 ## Authentication
 

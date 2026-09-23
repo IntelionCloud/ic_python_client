@@ -13,6 +13,7 @@ Standalone Python-клиент для REST API Intelion Cloud (`/api/v2/`). Не
 ```
 ic_python_client/
 ├── Dockerfile              # standalone-образ для тестов
+├── CHANGELOG.md            # заметки к версиям (с 0.7.0)
 ├── pyproject.toml
 ├── intelion_cloud/
 │   ├── __init__.py         # Public API: клиенты, модели, exceptions, enums
@@ -98,7 +99,7 @@ IntelionCloudError (base)
 │   ├── AuthenticationError    # 401
 │   ├── ForbiddenError         # 403
 │   ├── NotFoundError          # 404
-│   ├── ConflictError          # 409 (сервер занят операцией)
+│   ├── ConflictError          # 409: сервер занят, очередь запрещена (`reason`), отказ по сроку аренды (`error_code`)
 │   ├── RateLimitError         # 429 (+retry_after)
 │   ├── ValidationError        # 400 (+field_errors dict)
 │   └── ServerError            # 5xx
@@ -106,6 +107,7 @@ IntelionCloudError (base)
 ```
 
 `_extract_message()` ищет ключи `detail`, `message`, `error`, `non_field_errors` в теле ответа.
+Машинные ярлыки тела читаются свойствами `APIError`: `reason` (отказы `POST cloud-servers/`) и `error_code` (отказы по сроку аренды, `TermConflictCode`), оба `None`, если ключа нет.
 
 ### Enums (constants.py)
 
@@ -116,6 +118,7 @@ IntelionCloudError (base)
 | `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
 | `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
 | `OSType` | WINDOWS="win", LINUX="lin" |
+| `TermConflictCode` | AUTO_RENEWAL_CONSENT_REQUIRED, AUTO_RENEWAL_NOT_APPLICABLE, TERM_RENEWAL_IN_PROGRESS (строковые `error_code` 409-отказов по сроку, зеркало констант `user_panel.services.term_obligation`; у сервера есть и другие коды срока) |
 | `TermState` | NOT_TERM_PLAN="not_term_plan", ACTIVE="active", PENDING_CONSENT="pending_consent", GRANDFATHERED="grandfathered", LEGACY_EXPIRED="legacy_expired", CONFIRMED_EXPIRED="confirmed_expired" (строковые коды `CloudServer.term_state`, зеркало `user_panel.consts.TermState`) |
 
 ## API-эндпоинты
@@ -125,12 +128,12 @@ IntelionCloudError (base)
 | **CloudServers** | `list()` | GET `cloud-servers/` | Список серверов (auto-paginate) |
 | | `get(id)` | GET `cloud-servers/{id}/` | Один сервер |
 | | `create(...)` | POST `cloud-servers/` | Создать сервер (canonical) |
-| | `update(id, ...)` | PATCH `cloud-servers/{id}/` | Обновить имя / auto_renewal |
-| | `start(id)` | POST `cloud-servers/{id}/actions/` | Запустить (status=2) |
+| | `update(id, ...)` | PATCH `cloud-servers/{id}/` | Обновить имя / auto_renewal (под сроком включение 409, см. контракты) |
+| | `start(id)` | POST `cloud-servers/{id}/actions/` | Запустить (status=2); под сроком `is_auto_renewal` игнорируется |
 | | `stop(id)` | POST `cloud-servers/{id}/actions/` | Остановить (status=-1) |
 | | `reboot(id)` | POST `cloud-servers/{id}/actions/` | Перезагрузить (status="REBOOT") |
 | | `delete(id)` | POST `cloud-servers/{id}/actions/` | Удалить (status=-3) |
-| | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить, affordable_runtime, `launch_required_rub_cents` |
+| | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить, affordable_runtime, `launch_required_rub_cents`, `launch_funds_rub_cents` |
 | | `get_password(id)` | GET `cloud-servers/{id}/password/` | Пароль Windows |
 | | `clone(id)` | POST `cloud-servers/{id}/clone/` | Клонировать |
 | | `migrate(id, flavor_id, price_plan)` | POST `cloud-servers/{id}/migrate/` | Мигрировать (FlavorConfig PK + price_plan) |
@@ -147,7 +150,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**171 тест**, все проходят в Docker.
+**208 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -248,7 +251,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
   | `term_outage_active` | `bool` | property | прямо сейчас сервер лежит по нашей вине, конец срока уезжает |
   | `term_state` | `str`, дефолт `""` | property | код из `TermState`; `""` = сервер до реформы, ничего не сказал. Неизвестный код НЕ подменять |
   | `has_term_snapshot` | `bool` | property | снимок применим к текущему `price_plan` |
-  | `is_renewal_mandatory` | `bool` | property | срок идёт и подтверждён: автопродление не выключить |
+  | `is_renewal_mandatory` | `bool` | property | срок идёт и подтверждён: платежи внутри срока спишутся независимо от тумблера, выход только «прекратить аренду». Выключить тумблер можно (не продлевать после конца срока), включить через API v2 нельзя (409 `AUTO_RENEWAL_CONSENT_REQUIRED`) |
   | `is_bound_by_term` | `bool` | property | досрочное прекращение = пересчёт без скидки (включает `pending_consent`) |
   | `requires_term_consent` | `bool` | `get_requires_term_consent` | перед запуском нужно собрать согласие; правило живёт на сервере, фронт/SDK его НЕ выводят из `price_plan` |
   | `term_renewal_available` | `bool` | `get_term_renewal_available` | окно продления открыто, срок подтверждён, продление ещё не принято |
@@ -258,8 +261,10 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 
   Флаги `is_*` / `*_pending` / `*_available` и `term_state` это готовый ответ сервера, в клиенте их из дат не пересчитывать: на сервере эти правила уже трижды разъезжались, когда их считали в двух местах.
 - **`User.is_term_business`** (`UserSerializer`, та же серверная ветка; `bool`, дефолт `False`). Бизнес-клиент для срочного тарифа по оферте п. 8.5: `legal` в `org`/`ip` **И** заполнены `company_name`, `inn`, `ogrn` (у ИП ОГРНИП). Одного `legal` мало: ЮЛ без ИНН считается физлицом, платит весь срок вперёд, и доплату с него не взыскать. Это ЖИВОЙ предикат по текущему профилю: он говорит, как будет оплачен НОВЫЙ срок; про идущий срок отвечает снимок `CloudServer.pays_term_monthly`. В клиенте не выводить из `legal` / `company_name` (`inn` и `ogrn` в API v2 вообще не отдаются): правило живёт на сервере, второй копии не заводить. Тесты: `TestIsTermBusiness` в `tests/test_term_fields.py`.
-- **`update(id, is_auto_renewal=False)` под подтверждённым сроком → 400 `ValidationError`** (`validate_is_auto_renewal` на сервере, ключ `field_errors["is_auto_renewal"]`). Пока `is_bound_by_term` истинно, автопродление не выключается: аренда прекращается через «прекратить аренду» в ЛК. Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
-- **`ServerStatus` (`GET cloud-servers/{id}/status/`, вьюха `retrieve_server_can_start`, та же серверная ветка).** Помимо `can_start` и `affordable_runtime_seconds` клиент читает `is_enough_money_for_full_period` (`Optional[bool]`, сервер шлёт 0/1), `remaining_monthly_seconds` (`Optional[int]`) и новое `launch_required_rub_cents` (`Optional[int]`, копейки): сколько свободных денег нужно прямо сейчас, чтобы запуск состоялся. Единственная серверная формула (`services/configuration.launch_required_funds_rub_cents`): остаток идущего цикла, весь следующий акт, либо `0`, когда открытый акт уже покрывает запуск (сервер, выключенный под подтверждённым сроком). `None` при `can_start=False`: сервер тогда число не считает, а `0` читался бы как «запуск бесплатен». Первые два поля сервер отдавал и раньше, клиент их молча выбрасывал (та же болезнь, что у PR #526). Тесты: `tests/test_status_and_reject_reason.py`.
+- **Автопродление под сроком (`update(is_auto_renewal=...)`, гард `assert_auto_renewal_change_allowed` в `services/term_obligation.py`).** Выключить (`False`) можно всегда: отказ от продления в любой момент (решение владельца 17.09.2026; прежний 400 `validate_is_auto_renewal` удалён). Включить (`True`) под идущим подтверждённым сроком (`is_renewal_mandatory`) нельзя через API v2 вовсе: **409 `AUTO_RENEWAL_CONSENT_REQUIRED`**, включение продлевает срок и требует документа согласия с ПЭП, это только окно автопродления в ЛК. Под `term_state == "pending_consent"` (тумблер выбран в подписанном документе) и на истёкшем подтверждённом сроке, который ещё не остановлен: **409 `AUTO_RENEWAL_NOT_APPLICABLE`**. Вне срока всё как раньше. Тело `{error_code, message, detail}`, код читать через `APIError.error_code` и сравнивать с `TermConflictCode`, не с текстом.
+- **`start(id, is_auto_renewal=...)` под сроком** (`is_bound_by_term`, гард `apply_auto_renewal_on_start`): параметр **игнорируется** молча, ответ 200, тумблер остаётся таким, как в подписанном документе (иначе дефолт вьюхи включал бы продление физлицу, подписавшему «выключено»). Менять тумблер только через `update()`. В окне перезавода срока старт отдаёт **409 `TERM_RENEWAL_IN_PROGRESS`**, повторить через минуту. Тесты: `tests/test_auto_renewal_term.py`.
+- **Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
+- **`ServerStatus` (`GET cloud-servers/{id}/status/`, вьюха `retrieve_server_can_start`, та же серверная ветка).** Помимо `can_start` и `affordable_runtime_seconds` клиент читает `is_enough_money_for_full_period` (`Optional[bool]`, сервер шлёт 0/1), `remaining_monthly_seconds` (`Optional[int]`) и новые `launch_required_rub_cents` (`Optional[int]`, копейки): сколько свободных денег нужно прямо сейчас, чтобы запуск состоялся, и `launch_funds_rub_cents` (`Optional[int]`, копейки): деньги клиента, с которыми гейт это сравнит (`UserConfiguration.payment_funds_rub_cents`). У физлица на срочном тарифе это только свои деньги без лимита овердрафта (п. 8.5 Условий), поэтому бывает отрицательным; у ЮЛ/ИП на сроке и вне срока свободный баланс с лимитом. Сравнивать два поля как пришли, сумму из профиля не пересобирать. Единственная серверная формула (`services/configuration.launch_required_funds_rub_cents`): остаток идущего цикла, весь следующий акт, либо `0`, когда открытый акт уже покрывает запуск (сервер, выключенный под подтверждённым сроком). Оба `None` при `can_start=False`: сервер тогда числа не считает, а `0` читался бы как «запуск бесплатен». Первые два поля сервер отдавал и раньше, клиент их молча выбрасывал (та же болезнь, что у PR #526). Тесты: `tests/test_status_and_reject_reason.py`.
 - **`APIError.reason` и `ServerCreateRejectReason`.** `POST cloud-servers/` кладёт в свои 400/409 тела машинный ярлык `reason` рядом с `detail` (MIAN-412; `cpu_limit` в 400, `queue_disabled` в 409, `validation`/`internal_error` только в серверный лог). Читать через свойство `APIError.reason` (`Optional[str]`, `None` если ключа нет, в том числе у DRF-ошибок валидации с `field_errors`), сравнивать с константами `ServerCreateRejectReason`, а не с русским `detail`: текст меняется при первой правке копирайта.
 - **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). `pays_term_monthly` и `User.is_term_business` объявлены `BooleanField(read_only=True)`, в схеме они честные `boolean`. Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Из полей `UsageAct`: `next_charge_rub_cents`, `full_period_cost_rub_cents`, `full_planned_cost_rub_cents` (реально `int`), `promocode_code`, `promocode_discount_value` (реально nullable str / int). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
@@ -303,6 +308,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 0. **Пре-флайт (проверить ДО тега):**
    - Серверный PR, поля которого объявляет эта версия, **влит в прод**? Если нет — стоп (см. release-gating выше).
    - Тесты зелёные в Docker (`docker build -t ic_client_test . && docker run --rm ic_client_test pytest tests/ -q`).
+   - В `CHANGELOG.md` есть секция этой версии (заводится вместе с правкой, а не в день релиза; GitHub Release добавляет к ней только список коммитов), `(unreleased)` в заголовке заменить датой.
    - Есть write-доступ к репозиторию? Если только чтение — не пытаться пушить, готовить передачу (см. блок про права выше).
 
 1. **Закоммитить все изменения в `main`** (включая тесты, которые должны быть зелёные).

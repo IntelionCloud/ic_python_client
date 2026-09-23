@@ -10,6 +10,7 @@ __all__ = [
     "OSType",
     "TermState",
     "ServerCreateRejectReason",
+    "TermConflictCode",
     "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
     "DEFAULT_CONNECT_TIMEOUT",
@@ -120,3 +121,30 @@ class ServerCreateRejectReason:
     """Queueing for this GPU is forbidden; ``suggested_alternative`` is offered (409)."""
     INTERNAL_ERROR = "internal_error"
     """The server logged an internal error while creating the configuration (500)."""
+
+
+class TermConflictCode:
+    """Machine-readable ``error_code`` of 409 refusals caused by the rental term.
+
+    Read them through :attr:`intelion_cloud.exceptions.APIError.error_code`.
+    Values mirror the constants in ``user_panel.services.term_obligation`` on
+    the server. The body is ``{"error_code", "message", "detail"}``; the
+    Russian ``message`` changes with copywriting, branch on the code. The
+    server has other term codes too (``TERM_CONDITIONS_REQUIRED``,
+    ``TERM_TERMINATION_REQUIRED`` and more): compare ``error_code`` with a
+    string when you need one that is not listed here.
+    """
+
+    AUTO_RENEWAL_CONSENT_REQUIRED = "AUTO_RENEWAL_CONSENT_REQUIRED"
+    """``update(is_auto_renewal=True)`` under a running confirmed term
+    (``CloudServer.is_renewal_mandatory``). Turning auto-renewal on extends the
+    term, so it needs a signed consent to the renewal conditions: possible only
+    in the web panel (auto-renewal window on the server card), never via API v2."""
+    AUTO_RENEWAL_NOT_APPLICABLE = "AUTO_RENEWAL_NOT_APPLICABLE"
+    """``update(is_auto_renewal=True)`` while the toggle is fixed by a document:
+    conditions accepted but the server not started yet
+    (``term_state == "pending_consent"``), or a confirmed term that already
+    ended and was neither stopped nor renewed."""
+    TERM_RENEWAL_IN_PROGRESS = "TERM_RENEWAL_IN_PROGRESS"
+    """``start()`` hit the short window while the term is being renewed:
+    retry the start in about a minute."""

@@ -5,8 +5,11 @@ Server-side sources (branch ``feature/pricing-plans-revision``):
 * ``retrieve_server_can_start`` in ``website/user_panel/views/views.py`` returns
   ``can_start``, ``is_enough_money_for_full_period``,
   ``affordable_runtime_seconds``, ``remaining_monthly_seconds`` and, since the
-  pricing-plans revision, ``launch_required_rub_cents`` (``None`` when the
-  server cannot be started: the server does not compute it then).
+  pricing-plans revision, ``launch_required_rub_cents`` and
+  ``launch_funds_rub_cents`` (both ``None`` when the server cannot be started:
+  the server does not compute them then). ``launch_funds_rub_cents`` is
+  ``UserConfiguration.payment_funds_rub_cents``: an individual on a term plan
+  without the overdraft limit, so it can be negative.
 * ``CloudConfigurationViewSet.create`` puts ``reason`` next to ``detail`` in
   its own 400 (``cpu_limit``) and 409 (``queue_disabled``) bodies (MIAN-412).
   DRF validation errors (400 with field errors) carry no ``reason``.
@@ -27,6 +30,7 @@ STATUS_CAN_START = {
     "affordable_runtime_seconds": 7200,
     "remaining_monthly_seconds": 1_000_000,
     "launch_required_rub_cents": 650_000,
+    "launch_funds_rub_cents": 700_000,
 }
 
 STATUS_CANNOT_START = {
@@ -35,6 +39,7 @@ STATUS_CANNOT_START = {
     "affordable_runtime_seconds": 0,
     "remaining_monthly_seconds": 0,
     "launch_required_rub_cents": None,
+    "launch_funds_rub_cents": None,
 }
 
 
@@ -46,6 +51,7 @@ class TestServerStatusModel:
         assert status.affordable_runtime_seconds == 7200
         assert status.remaining_monthly_seconds == 1_000_000
         assert status.launch_required_rub_cents == 650_000
+        assert status.launch_funds_rub_cents == 700_000
 
     def test_cannot_start_keeps_launch_required_none(self):
         """``None`` must survive: ``0`` would read as "the start is free"."""
@@ -53,6 +59,7 @@ class TestServerStatusModel:
         assert status.can_start is False
         assert status.is_enough_money_for_full_period is False
         assert status.launch_required_rub_cents is None
+        assert status.launch_funds_rub_cents is None
 
     def test_powered_off_under_term_requires_zero(self):
         """An open act already covers the start: the server sends ``0``, not ``None``."""
@@ -65,6 +72,31 @@ class TestServerStatusModel:
         assert status.is_enough_money_for_full_period is None
         assert status.remaining_monthly_seconds is None
         assert status.launch_required_rub_cents is None
+        assert status.launch_funds_rub_cents is None
+
+    def test_payload_before_launch_funds_was_added(self):
+        """A server that already sends ``launch_required`` but not ``launch_funds``."""
+        payload = {k: v for k, v in STATUS_CAN_START.items() if k != "launch_funds_rub_cents"}
+        status = ServerStatus.from_dict(payload)
+        assert status.launch_required_rub_cents == 650_000
+        assert status.launch_funds_rub_cents is None
+
+    def test_individual_on_term_without_overdraft_can_be_negative(self):
+        """Own money only (Terms cl. 8.5): a debt shows as a negative number, not clipped to 0."""
+        status = ServerStatus.from_dict({**STATUS_CAN_START, "launch_funds_rub_cents": -12_345})
+        assert status.launch_funds_rub_cents == -12_345
+        assert status.launch_funds_rub_cents < status.launch_required_rub_cents
+
+    @pytest.mark.parametrize("funds", [649_999, 650_000, 650_001])
+    def test_funds_around_the_requirement_are_passed_through_exactly(self, funds):
+        """The SDK does not round or compare: the gate's numbers arrive as the server sent them."""
+        status = ServerStatus.from_dict({**STATUS_CAN_START, "launch_funds_rub_cents": funds})
+        assert status.launch_funds_rub_cents == funds
+        assert status.launch_required_rub_cents == 650_000
+
+    def test_zero_funds_is_zero_not_none(self):
+        status = ServerStatus.from_dict({**STATUS_CAN_START, "launch_funds_rub_cents": 0})
+        assert status.launch_funds_rub_cents == 0
 
 
 class TestGetStatusResource:
@@ -75,6 +107,16 @@ class TestGetStatusResource:
         status = client.cloud_servers.get_status(42)
         assert status.launch_required_rub_cents == 650_000
         assert status.remaining_monthly_seconds == 1_000_000
+        assert status.launch_funds_rub_cents == 700_000
+        client.close()
+
+    @respx.mock(base_url=API_URL)
+    def test_get_status_cannot_start_has_no_funds(self, respx_mock):
+        respx_mock.get("cloud-servers/42/status/").respond(200, json=STATUS_CANNOT_START)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        status = client.cloud_servers.get_status(42)
+        assert status.can_start is False
+        assert status.launch_funds_rub_cents is None
         client.close()
 
 

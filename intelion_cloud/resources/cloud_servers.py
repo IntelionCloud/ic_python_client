@@ -95,7 +95,30 @@ class CloudServers(SyncResource):
         name: Optional[str] = None,
         is_auto_renewal: Optional[bool] = None,
     ) -> CloudServer:
-        """Update server properties (name, auto-renewal)."""
+        """Update server properties (name, auto-renewal).
+
+        ``is_auto_renewal`` under a rental term (see ``CloudServer.term_state``):
+
+        * ``False`` is always accepted: the client may refuse the renewal at
+          any time.
+        * ``True`` under a running confirmed term
+          (``CloudServer.is_renewal_mandatory``) raises
+          :class:`~intelion_cloud.exceptions.ConflictError` with
+          ``error_code == "AUTO_RENEWAL_CONSENT_REQUIRED"``. Turning it on
+          extends the term and needs a signed consent to the renewal
+          conditions, so it is possible only in the web panel (auto-renewal
+          window on the server card), not through API v2.
+        * ``True`` after the conditions were accepted but before the first
+          start (``term_state == "pending_consent"``), or on a confirmed term
+          that ended and was neither stopped nor renewed, raises
+          :class:`~intelion_cloud.exceptions.ConflictError` with
+          ``error_code == "AUTO_RENEWAL_NOT_APPLICABLE"``.
+        * Off a term (hourly, postpaid, legacy) nothing changed.
+
+        Codes: :class:`~intelion_cloud.constants.TermConflictCode`; read them
+        through :attr:`~intelion_cloud.exceptions.APIError.error_code`;
+        ``str(exc)`` is the server's message for the user.
+        """
         payload: Dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -113,7 +136,21 @@ class CloudServers(SyncResource):
         is_auto_renewal: Optional[bool] = None,
         run_on_affordable_time: bool = False,
     ) -> CloudServer:
-        """Start a stopped server."""
+        """Start a stopped server.
+
+        ``is_auto_renewal`` is written only off a rental term. When the
+        server is bound by a term (``CloudServer.is_bound_by_term``: the term
+        is running, or the conditions were accepted and this start opens it)
+        the argument is ignored and the toggle stays as in the signed consent
+        document; the call still succeeds. Change it with :meth:`update`.
+
+        Raises :class:`~intelion_cloud.exceptions.ConflictError` with
+        ``error_code == "TERM_RENEWAL_IN_PROGRESS"`` if the start hits the
+        short window while the term is being renewed: retry in about a
+        minute. Other term refusals (for example ``TERM_CONDITIONS_REQUIRED``)
+        come the same way, see
+        :attr:`~intelion_cloud.exceptions.APIError.error_code`.
+        """
         payload = _build_action_payload(
             2,  # ServerStatus.ACTIVE
             is_auto_renewal=is_auto_renewal,
@@ -240,6 +277,7 @@ class AsyncCloudServers(AsyncResource):
         name: Optional[str] = None,
         is_auto_renewal: Optional[bool] = None,
     ) -> CloudServer:
+        """Async :meth:`CloudServers.update`; same 409 rules for ``is_auto_renewal``."""
         payload: Dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -255,6 +293,7 @@ class AsyncCloudServers(AsyncResource):
         is_auto_renewal: Optional[bool] = None,
         run_on_affordable_time: bool = False,
     ) -> CloudServer:
+        """Async :meth:`CloudServers.start`; ``is_auto_renewal`` is ignored under a term."""
         payload = _build_action_payload(
             2,
             is_auto_renewal=is_auto_renewal,

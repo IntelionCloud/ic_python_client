@@ -479,6 +479,18 @@ class ServerStatus:
     powered off under a confirmed term). ``None`` when ``can_start`` is false:
     the server does not compute it then, and ``0`` would read as "free".
     """
+    launch_funds_rub_cents: Optional[int] = None
+    """The client's money the start gate compares with ``launch_required_rub_cents`` (kopecks).
+
+    Server-side ``UserConfiguration.payment_funds_rub_cents``. A term plan paid
+    by an individual: own money only, balance minus frozen, WITHOUT the
+    overdraft limit (Terms, cl. 8.5), so it can be negative. A term plan paid
+    by a business (legal entity or sole proprietor per the client-kind
+    snapshot, see ``User.is_term_business``), and any server off a term: the
+    free balance including the overdraft limit. Compare the two fields as they come, do not
+    rebuild the sum from the profile: a second copy of the rule drifts from the
+    gate. ``None`` when ``can_start`` is false or on an older server.
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ServerStatus:
@@ -493,4 +505,5 @@ class ServerStatus:
             ),
             remaining_monthly_seconds=_get(data, "remaining_monthly_seconds"),
             launch_required_rub_cents=_get(data, "launch_required_rub_cents"),
+            launch_funds_rub_cents=_get(data, "launch_funds_rub_cents"),
         )
