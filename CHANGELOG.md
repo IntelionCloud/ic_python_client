@@ -32,6 +32,17 @@ before that server change is in production: the fields below would be empty.
 - New `APIError.error_code` property and `TermConflictCode` constants to
   branch on these refusals instead of the Russian message.
 
+### Removed and panel-only endpoints
+
+- `PUT /api/v2/cloud-servers/{id}/` is gone and answers 405: use `PATCH`
+  (`cloud_servers.update`). The SDK never sent `PUT`, so no code change.
+- Signing term documents (term conditions, term renewal, turning auto-renewal
+  on under a term, rental termination: the panel endpoints under
+  `/lk/cloud-servers/{id}/`) is possible only by the client in the web panel
+  session: with an API token these calls answer 403. The SDK has no wrappers
+  for them. The termination quote (`GET .../termination-quote/`) still
+  accepts a token.
+
 ### Launch check
 
 - `ServerStatus.launch_funds_rub_cents`: the client's money the start gate
