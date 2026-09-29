@@ -6,8 +6,8 @@ Server-side sources (branch ``feature/pricing-plans-revision``):
   ``website/user_panel/services/term_obligation.py`` guards
   ``PATCH cloud-servers/{id}/``: turning auto-renewal off is always allowed;
   turning it on under a running confirmed term is 409
-  ``AUTO_RENEWAL_CONSENT_REQUIRED`` (only the web panel can do it, with a
-  signed consent); under ``pending_consent`` or an ended, not stopped term it
+  ``AUTO_RENEWAL_CONSENT_REQUIRED`` (only the customer in the web panel can do
+  it); under ``pending_consent`` or an ended, not stopped term it
   is 409 ``AUTO_RENEWAL_NOT_APPLICABLE``.
 * ``apply_auto_renewal_on_start``: under ``is_bound_by_term`` the start keeps
   the toggle from the signed document and ignores ``isAutoRenewal``.

@@ -12,8 +12,8 @@ before that server change is in production: the fields below would be empty.
 
 - `cloud_servers.update(id, is_auto_renewal=True)` under a running confirmed
   term now fails with `ConflictError` (409), `error_code`
-  `AUTO_RENEWAL_CONSENT_REQUIRED`: turning auto-renewal on extends the term and
-  needs a signed consent, so it is possible only in the web panel. Before the
+  `AUTO_RENEWAL_CONSENT_REQUIRED`: turning auto-renewal on extends the term, so
+  only the customer can do it in the web panel. Before the
   first start under an accepted consent (`term_state == "pending_consent"`) and
   on an ended, not stopped term the code is `AUTO_RENEWAL_NOT_APPLICABLE`.
   Turning it off (`False`) is always accepted; off a term nothing changed.

@@ -105,9 +105,8 @@ class CloudServers(SyncResource):
           (``CloudServer.is_renewal_mandatory``) raises
           :class:`~intelion_cloud.exceptions.ConflictError` with
           ``error_code == "AUTO_RENEWAL_CONSENT_REQUIRED"``. Turning it on
-          extends the term and needs a signed consent to the renewal
-          conditions, so it is possible only in the web panel (auto-renewal
-          window on the server card), not through API v2.
+          extends the term: only the customer can do it, with the switch on
+          the server card in the web panel, not through API v2.
         * ``True`` after the conditions were accepted but before the first
           start (``term_state == "pending_consent"``), or on a confirmed term
           that ended and was neither stopped nor renewed, raises

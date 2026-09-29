@@ -138,8 +138,8 @@ class TermConflictCode:
     AUTO_RENEWAL_CONSENT_REQUIRED = "AUTO_RENEWAL_CONSENT_REQUIRED"
     """``update(is_auto_renewal=True)`` under a running confirmed term
     (``CloudServer.is_renewal_mandatory``). Turning auto-renewal on extends the
-    term, so it needs a signed consent to the renewal conditions: possible only
-    in the web panel (auto-renewal window on the server card), never via API v2."""
+    term: only the customer can do it, with the switch on the server card in the
+    web panel, never via API v2 (no consent window since 2026-09-29)."""
     AUTO_RENEWAL_NOT_APPLICABLE = "AUTO_RENEWAL_NOT_APPLICABLE"
     """``update(is_auto_renewal=True)`` while the toggle is fixed by a document:
     conditions accepted but the server not started yet

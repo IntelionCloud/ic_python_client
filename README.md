@@ -145,7 +145,7 @@ if server.term_state == TermState.ACTIVE:
     print(f"{server.term_months} months at -{server.term_discount_percent}% until {server.term_ends_at}")
 
 # Turning auto-renewal off is always allowed. Turning it on under a running
-# confirmed term extends the term and needs a signed consent: web panel only.
+# confirmed term extends the term: only the customer in the web panel.
 try:
     client.cloud_servers.update(42, is_auto_renewal=True)
 except ConflictError as e:
