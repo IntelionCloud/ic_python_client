@@ -29,8 +29,8 @@ from intelion_cloud.exceptions import APIError, ConflictError, ValidationError
 from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER, SAMPLE_TERM_SERVER
 
 CONSENT_MESSAGE = (
-    "Включение автопродления продлевает срок аренды: подтвердите условия "
-    "продления в окне автопродления на карточке сервера."
+    "Включение автопродления продлевает срок аренды: включить его может только сам "
+    "клиент на карточке сервера в личном кабинете."
 )
 PENDING_MESSAGE = (
     "Автопродление для этого срока выбрано при подтверждении условий. "
