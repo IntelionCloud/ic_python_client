@@ -34,8 +34,9 @@ before that server change is in production: the fields below would be empty.
 
 ### Removed and panel-only endpoints
 
-- `PUT /api/v2/cloud-servers/{id}/` is gone and answers 405: use `PATCH`
-  (`cloud_servers.update`). The SDK never sent `PUT`, so no code change.
+- `PUT /api/v2/cloud-servers/{id}/` is kept (it is routed and does not answer
+  405). Prefer `PATCH` (`cloud_servers.update`); the SDK never sent `PUT`, so no
+  code change.
 - Signing term documents (term conditions, term renewal, turning auto-renewal
   on under a term, rental termination: the panel endpoints under
   `/lk/cloud-servers/{id}/`) is possible only by the client in the web panel

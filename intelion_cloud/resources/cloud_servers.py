@@ -159,7 +159,13 @@ class CloudServers(SyncResource):
         return CloudServer.from_dict(data)
 
     def stop(self, server_id: int) -> CloudServer:
-        """Stop (shelve) a running server."""
+        """Stop a running server.
+
+        Off a rental term the server is shelved. Under a term
+        (``CloudServer.is_bound_by_term``) the virtual machine is only powered
+        off: the usage act stays open and charges keep running until the end
+        of the term. To stop paying, terminate the term in the web panel.
+        """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
         return CloudServer.from_dict(data)
 
@@ -169,7 +175,13 @@ class CloudServers(SyncResource):
         return CloudServer.from_dict(data)
 
     def delete(self, server_id: int) -> CloudServer:
-        """Delete a server (irreversible)."""
+        """Delete a server (irreversible).
+
+        Under a confirmed rental term the call is refused with
+        :class:`~intelion_cloud.exceptions.ConflictError`, ``error_code ==
+        "TERM_TERMINATION_REQUIRED"``: wait for the term to end with
+        auto-renewal off, or terminate it in the web panel.
+        """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
 
@@ -310,6 +322,7 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def stop(self, server_id: int) -> CloudServer:
+        """Async :meth:`CloudServers.stop`; under a term the VM is only powered off."""
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
         return CloudServer.from_dict(data)
 
@@ -318,6 +331,7 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def delete(self, server_id: int) -> CloudServer:
+        """Async :meth:`CloudServers.delete`; under a term: 409 ``TERM_TERMINATION_REQUIRED``."""
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
 

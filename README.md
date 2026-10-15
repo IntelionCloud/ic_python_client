@@ -132,7 +132,11 @@ elif server.cold_free:
 
 ## Rental term
 
-Servers on a term plan (`price_plan` 3, 6 or 12 months) carry a read-only
+A monthly plan is a term too: servers on `price_plan` 1, 3, 6 or 12 months need
+the term conditions signed in the web panel, otherwise `start` is refused with
+409 `TERM_CONDITIONS_REQUIRED`. Under a running term `stop` only powers the VM
+off (the term stays open and charges continue) and `delete` is refused with 409
+`TERM_TERMINATION_REQUIRED`. Servers on a term plan carry a read-only
 snapshot of the commitment: `term_months`, `term_discount_percent`,
 `term_started_at`, `term_ends_at` (already shifted by any downtime on our side),
 `term_state` and the flags the server derives from them.
@@ -156,7 +160,8 @@ except ConflictError as e:
 Under a term `start(is_auto_renewal=...)` ignores the argument: the toggle stays
 as in the signed consent. Consent, renewal and early termination are
 personal-account actions and are not part of API v2; the SDK only reads their
-state.
+state. A company or sole proprietor cannot clear `company_name` through
+`users.update` (400): the name decides the client kind of the term.
 
 ## Authentication
 

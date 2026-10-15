@@ -42,7 +42,12 @@ class Users(SyncResource):
         last_viewed_event: Optional[str] = None,
         default_payment_type: Optional[str] = None,
     ) -> User:
-        """Update user profile fields."""
+        """Update user profile fields.
+
+        A legal entity or sole proprietor cannot clear ``company_name``: the
+        server answers 400, because the name decides the client kind of a
+        rental term. A natural person can.
+        """
         payload: Dict[str, Any] = {}
         if first_name is not None:
             payload["first_name"] = first_name
