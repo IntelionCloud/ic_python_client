@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from intelion_cloud import IntelionCloud, ServerState, TermState, ValidationError
+from intelion_cloud import ConflictError, IntelionCloud, ServerState, TermState, ValidationError
 from intelion_cloud._pagination import PaginatedResponse
 
 from .conftest import (
@@ -290,6 +290,22 @@ class TestCloudServersActions:
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = client.cloud_servers.reinstall_os(42)
         assert server.id == SAMPLE_CLOUD_SERVER["id"]
+        client.close()
+
+    @pytest.mark.parametrize(
+        "code",
+        ["TERM_CONDITIONS_REQUIRED", "TERM_RENEWAL_IN_PROGRESS", "LEGACY_TERMS_CONSENT_REQUIRED"],
+    )
+    @respx.mock(base_url=API_URL)
+    def test_reinstall_os_term_refusal_carries_error_code(self, respx_mock, code):
+        """Without an open period reinstall_os is a start: the 409 carries the term code."""
+        respx_mock.post("cloud-servers/42/reinstall-os/").respond(
+            409, json={"error_code": code, "message": "refused", "detail": "refused"}
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(ConflictError) as excinfo:
+            client.cloud_servers.reinstall_os(42)
+        assert excinfo.value.error_code == code
         client.close()
 
     @respx.mock(base_url=API_URL)

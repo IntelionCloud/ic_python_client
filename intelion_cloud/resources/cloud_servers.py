@@ -188,10 +188,20 @@ class CloudServers(SyncResource):
     def reinstall_os(self, server_id: int) -> CloudServer:
         """Reinstall the OS on a server, wiping the boot disk.
 
-        All data on the boot disk is destroyed. The current monthly billing
-        cycle is preserved (the open UsageAct is reused). A new IP and root
-        password are generated and become available in the user panel a few
-        minutes after the call returns.
+        All data on the boot disk is destroyed. While the server has an open
+        UsageAct whose period has not ended, that act is reused and the
+        billing cycle is preserved. Without one (the term is not signed, or
+        the term has ended and is not renewed yet) the call is a start: it
+        goes through the same term and funds checks as :meth:`start`. A new IP
+        and root password are generated and become available in the user
+        panel a few minutes after the call returns.
+
+        Raises :class:`~intelion_cloud.exceptions.ConflictError` with
+        ``error_code`` ``"TERM_CONDITIONS_REQUIRED"`` (sign the term
+        conditions in the web panel), ``"TERM_RENEWAL_IN_PROGRESS"`` (retry in
+        about a minute) or ``"LEGACY_TERMS_CONSENT_REQUIRED"``, and
+        :class:`~intelion_cloud.exceptions.ValidationError` (400) when the
+        balance does not cover a new period. Nothing is changed on refusal.
         """
         data = self._post(f"{_PATH}{server_id}/reinstall-os/")
         return CloudServer.from_dict(data)
@@ -336,7 +346,7 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def reinstall_os(self, server_id: int) -> CloudServer:
-        """Reinstall the OS on a server, wiping the boot disk."""
+        """Async :meth:`CloudServers.reinstall_os`; without an open period it can be refused by the term checks."""
         data = await self._post(f"{_PATH}{server_id}/reinstall-os/")
         return CloudServer.from_dict(data)
 

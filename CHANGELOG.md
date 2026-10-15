@@ -32,7 +32,7 @@ before that server change is in production: the fields below would be empty.
 - New `APIError.error_code` property and `TermConflictCode` constants to
   branch on these refusals instead of the Russian message.
 
-### Removed and panel-only endpoints
+### Endpoints: PUT kept, panel-only signatures
 
 - `PUT /api/v2/cloud-servers/{id}/` is kept (it is routed and does not answer
   405). Prefer `PATCH` (`cloud_servers.update`); the SDK never sent `PUT`, so no
@@ -43,6 +43,25 @@ before that server change is in production: the fields below would be empty.
   session: with an API token these calls answer 403. The SDK has no wrappers
   for them. The termination quote (`GET .../termination-quote/`) still
   accepts a token.
+
+### Refusals under a rental term
+
+- `cloud_servers.start(id)` on a server with a term plan (1, 3, 6 or 12
+  months) whose conditions are not signed answers `ConflictError` (409),
+  `error_code` `TERM_CONDITIONS_REQUIRED`. Check `CloudServer.requires_term_consent`
+  first: a server rented before the reform without a signature still starts
+  (200) and has `requires_term_consent == False`.
+- `cloud_servers.stop(id)` under a term only powers the VM off: the term stays
+  open and charges continue.
+- `cloud_servers.delete(id)` under a running term answers `ConflictError` (409),
+  `error_code` `TERM_TERMINATION_REQUIRED`.
+- `cloud_servers.reinstall_os(id)` reuses the open period while it lasts;
+  without one it is a start and can answer `ConflictError` (409) with
+  `TERM_CONDITIONS_REQUIRED`, `TERM_RENEWAL_IN_PROGRESS` or
+  `LEGACY_TERMS_CONSENT_REQUIRED`, or `ValidationError` (400) when the balance
+  does not cover a new period.
+- `users.update(id, company_name="")` for a company or sole proprietor answers
+  `ValidationError` (400): the name decides the client kind of the term.
 
 ### Launch check
 

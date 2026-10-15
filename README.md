@@ -132,9 +132,12 @@ elif server.cold_free:
 
 ## Rental term
 
-A monthly plan is a term too: servers on `price_plan` 1, 3, 6 or 12 months need
-the term conditions signed in the web panel, otherwise `start` is refused with
-409 `TERM_CONDITIONS_REQUIRED`. Under a running term `stop` only powers the VM
+A monthly plan is a term too: a server on `price_plan` 1, 3, 6 or 12 months
+needs the term conditions signed in the web panel when
+`server.requires_term_consent` is true, otherwise `start` (and `reinstall_os`
+without an open period) is refused with 409 `TERM_CONDITIONS_REQUIRED`. Servers
+rented before the reform without a signature still start and report
+`requires_term_consent == False`. Under a running term `stop` only powers the VM
 off (the term stays open and charges continue) and `delete` is refused with 409
 `TERM_TERMINATION_REQUIRED`. Servers on a term plan carry a read-only
 snapshot of the commitment: `term_months`, `term_discount_percent`,

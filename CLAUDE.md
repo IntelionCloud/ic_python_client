@@ -118,7 +118,7 @@ IntelionCloudError (base)
 | `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
 | `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
 | `OSType` | WINDOWS="win", LINUX="lin" |
-| `TermConflictCode` | AUTO_RENEWAL_CONSENT_REQUIRED, AUTO_RENEWAL_NOT_APPLICABLE, TERM_RENEWAL_IN_PROGRESS (строковые `error_code` 409-отказов по сроку, зеркало констант `user_panel.services.term_obligation`; у сервера есть и другие коды срока) |
+| `TermConflictCode` | AUTO_RENEWAL_CONSENT_REQUIRED, AUTO_RENEWAL_NOT_APPLICABLE, TERM_RENEWAL_IN_PROGRESS (отказ `start()` и `reinstall_os()`; строковые `error_code` 409-отказов по сроку, зеркало констант `user_panel.services.term_obligation`; у сервера есть и другие коды срока) |
 | `TermState` | NOT_TERM_PLAN="not_term_plan", ACTIVE="active", PENDING_CONSENT="pending_consent", GRANDFATHERED="grandfathered", LEGACY_EXPIRED="legacy_expired", CONFIRMED_EXPIRED="confirmed_expired" (строковые коды `CloudServer.term_state`, зеркало `user_panel.consts.TermState`) |
 
 ## API-эндпоинты
@@ -133,6 +133,7 @@ IntelionCloudError (base)
 | | `stop(id)` | POST `cloud-servers/{id}/actions/` | Остановить (status=-1) |
 | | `reboot(id)` | POST `cloud-servers/{id}/actions/` | Перезагрузить (status="REBOOT") |
 | | `delete(id)` | POST `cloud-servers/{id}/actions/` | Удалить (status=-3) |
+| | `reinstall_os(id)` | POST `cloud-servers/{id}/reinstall-os/` | Переустановить ОС. Без открытого периода аренды это запуск: 409 `TERM_CONDITIONS_REQUIRED` / `TERM_RENEWAL_IN_PROGRESS` / `LEGACY_TERMS_CONSENT_REQUIRED`, 400 при нехватке денег |
 | | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить, affordable_runtime, `launch_required_rub_cents`, `launch_funds_rub_cents` |
 | | `get_password(id)` | GET `cloud-servers/{id}/password/` | Пароль Windows |
 | | `clone(id)` | POST `cloud-servers/{id}/clone/` | Клонировать |

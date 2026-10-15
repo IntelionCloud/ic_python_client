@@ -146,5 +146,5 @@ class TermConflictCode:
     (``term_state == "pending_consent"``), or a confirmed term that already
     ended and was neither stopped nor renewed."""
     TERM_RENEWAL_IN_PROGRESS = "TERM_RENEWAL_IN_PROGRESS"
-    """``start()`` hit the short window while the term is being renewed:
-    retry the start in about a minute."""
+    """``start()`` or ``reinstall_os()`` hit the short window while the term is
+    being renewed: retry in about a minute."""
