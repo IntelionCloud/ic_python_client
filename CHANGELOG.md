@@ -7,8 +7,6 @@ auto-generated list of merged commits on top of this file.
 
 Pairs with the pricing-plans revision on the server (rental terms). Do not tag
 before that server change is in production: the fields below would be empty.
-`ServerStatus.upcoming_term_payment` additionally needs the launch reservation
-change (PRT-259) in production; until then the field is just `None`.
 
 ### Auto-renewal under a rental term
 
@@ -73,13 +71,6 @@ change (PRT-259) in production; until then the field is just `None`.
   without a signed consent (`term_conditions_accepted_at` is empty) still
   launches on the free balance including the limit. `None` when the server
   cannot be started or on an older server.
-
-- `ServerStatus.upcoming_term_payment` (`UpcomingTermPayment`: `server_id`,
-  `server_name`, `amount_rub_cents`, `date`, `shortfall_rub_cents`): the
-  nearest mandatory term payment of another server of the same client that this
-  start would leave unfunded. A start and a term renewal draw on the same money
-  and whoever reserved first gets it (PRT-259). `None` when there is no such
-  payment, the money after the start covers it, or on a server without PRT-259.
 
 ### Found by comparing the SDK with the server serializers (PRT-86)
 

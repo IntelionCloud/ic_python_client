@@ -494,36 +494,6 @@ class CloudServer:
 
 
 @dataclass(frozen=True)
-class UpcomingTermPayment:
-    """The nearest mandatory term payment of ANOTHER server of the same client.
-
-    A start and a term renewal draw on the same money, and whoever reserved
-    first gets it (owner's rule of 2026-10-23, PRT-259). The launch window
-    shows this block so the start does not turn into a surprise: after the
-    start there may not be enough left for the renewal.
-    """
-
-    server_id: int
-    server_name: str
-    amount_rub_cents: int
-    """What the renewal cycle of that server will charge, kopecks."""
-    date: Optional[str] = None
-    """ISO datetime of that payment (end of the current act of the other server)."""
-    shortfall_rub_cents: int = 0
-    """How much is missing for that payment after this start, kopecks."""
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> UpcomingTermPayment:
-        return cls(
-            server_id=data["server_id"],
-            server_name=data.get("server_name", "") or "",
-            amount_rub_cents=data.get("amount_rub_cents", 0) or 0,
-            date=_get(data, "date"),
-            shortfall_rub_cents=data.get("shortfall_rub_cents", 0) or 0,
-        )
-
-
-@dataclass(frozen=True)
 class ServerStatus:
     """Result of the pre-start status check endpoint.
 
@@ -562,12 +532,6 @@ class ServerStatus:
     rebuild the sum from the profile: a second copy of the rule drifts from the
     gate. ``None`` when ``can_start`` is false or on an older server.
     """
-    upcoming_term_payment: Optional[UpcomingTermPayment] = None
-    """The nearest mandatory term payment of another server that this start would leave unfunded.
-
-    ``None`` when there is no such payment, when the money after the start
-    covers it, when ``can_start`` is false, or on an older server (PRT-259).
-    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ServerStatus:
@@ -583,5 +547,4 @@ class ServerStatus:
             remaining_monthly_seconds=_get(data, "remaining_monthly_seconds"),
             launch_required_rub_cents=_get(data, "launch_required_rub_cents"),
             launch_funds_rub_cents=_get(data, "launch_funds_rub_cents"),
-            upcoming_term_payment=_parse_nested(data, "upcoming_term_payment", UpcomingTermPayment),
         )

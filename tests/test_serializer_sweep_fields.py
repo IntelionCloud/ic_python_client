@@ -11,8 +11,6 @@ Server-side sources:
 * ``UserSerializer`` (``user_panel/serializers.py``): account fields.
 * ``UserConfigurationAddonSerializer`` (``addons/serializers.py``): addon log.
 * ``UserConfigurationSerializer.get_cold_free`` and ``get_disk_extend_order``.
-* ``retrieve_server_can_start`` (``user_panel/views/views.py``, PRT-259):
-  ``upcoming_term_payment``.
 * ``CreateConfigurationSerializer.ssh_key_ids``, ``ChangeConfigurationSerializer.ssd_count``.
 """
 
@@ -26,12 +24,10 @@ from intelion_cloud import (
     ColdStorageSummary,
     DiskExtendOrder,
     IntelionCloud,
-    UpcomingTermPayment,
 )
 from intelion_cloud.models import (
     CloudServer,
     ColdFreeWindow,
-    ServerStatus,
     SoftwareAddonInstance,
     User,
 )
@@ -43,77 +39,6 @@ from .conftest import (
     SAMPLE_SOFTWARE_ADDON,
     SAMPLE_USER,
 )
-
-STATUS_BASE = {
-    "can_start": True,
-    "is_enough_money_for_full_period": 1,
-    "affordable_runtime_seconds": 3600,
-    "remaining_monthly_seconds": 0,
-    "launch_required_rub_cents": 650_000,
-    "launch_funds_rub_cents": 700_000,
-}
-
-UPCOMING = {
-    "server_id": 77,
-    "server_name": "train-box",
-    "amount_rub_cents": 1_200_000,
-    "date": "2026-11-02T09:00:00+00:00",
-    "shortfall_rub_cents": 1_150_000,
-}
-
-
-class TestUpcomingTermPayment:
-    """PRT-259: the start window learns about the neighbour's mandatory payment."""
-
-    def test_present(self):
-        status = ServerStatus.from_dict({**STATUS_BASE, "upcoming_term_payment": UPCOMING})
-        payment = status.upcoming_term_payment
-        assert isinstance(payment, UpcomingTermPayment)
-        assert payment.server_id == 77
-        assert payment.server_name == "train-box"
-        assert payment.amount_rub_cents == 1_200_000
-        assert payment.date == "2026-11-02T09:00:00+00:00"
-        assert payment.shortfall_rub_cents == 1_150_000
-
-    def test_null_when_no_payment(self):
-        """The server sends an explicit ``null`` when nothing is unfunded."""
-        status = ServerStatus.from_dict({**STATUS_BASE, "upcoming_term_payment": None})
-        assert status.upcoming_term_payment is None
-
-    def test_absent_on_older_server(self):
-        status = ServerStatus.from_dict(STATUS_BASE)
-        assert status.upcoming_term_payment is None
-
-    def test_cannot_start_branch(self):
-        """When ``can_start`` is false the view sends ``null`` next to the other null fields."""
-        status = ServerStatus.from_dict(
-            {
-                "can_start": False,
-                "is_enough_money_for_full_period": 0,
-                "affordable_runtime_seconds": 0,
-                "launch_required_rub_cents": None,
-                "launch_funds_rub_cents": None,
-                "upcoming_term_payment": None,
-            }
-        )
-        assert status.can_start is False
-        assert status.upcoming_term_payment is None
-
-    @respx.mock(base_url=API_URL)
-    def test_get_status_both_cases(self, respx_mock):
-        route = respx_mock.get("cloud-servers/42/status/")
-        route.side_effect = [
-            respx.MockResponse(200, json={**STATUS_BASE, "upcoming_term_payment": UPCOMING}),
-            respx.MockResponse(200, json={**STATUS_BASE, "upcoming_term_payment": None}),
-        ]
-        client = IntelionCloud(token="tok", base_url=BASE_URL)
-        warned = client.cloud_servers.get_status(42)
-        clean = client.cloud_servers.get_status(42)
-        client.close()
-        assert warned.upcoming_term_payment is not None
-        assert warned.upcoming_term_payment.shortfall_rub_cents == 1_150_000
-        assert clean.upcoming_term_payment is None
-
 
 class TestUserAccountFields:
     ACCOUNT = {
