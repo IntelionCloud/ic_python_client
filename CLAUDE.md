@@ -114,12 +114,12 @@ IntelionCloudError (base)
 | Enum | Значения |
 |------|----------|
 | `ServerStatus` | ERROR=-4, DELETED=-3, REQUESTED=-2, PAUSED=-1, PAUSING=0, START=1, ACTIVE=2, PREPARING=3 |
-| `ServerState` | IDLE=0, STARTING=100, SHELVING=200, MIGRATING_*=301-304, CLONING=400, QUEUED=500, AWAITING_PASSWORD=600, MAINTENANCE=700, CLEANUP_IN_PROGRESS=800, REINSTALLING=900, COLD_MOVING=950 (ещё НЕ в хранении), COLD_STORAGE=1000, COLD_GRACE=1100 |
+| `ServerState` | IDLE=0, STARTING=100, SHELVING=200, MIGRATING_*=301-304, DISK_EXTENDING=350, DISK_EXTENDING_ON_START=360, CLONING=400, QUEUED=500, AWAITING_PASSWORD=600, MAINTENANCE=700, CLEANUP_IN_PROGRESS=800, REINSTALLING=900, COLD_MOVING=950 (ещё НЕ в хранении), COLD_STORAGE=1000, COLD_GRACE=1100 |
 | `PricePlan` | POSTPAID_QUARTER=-3, POSTPAID_MONTHLY=-1, HOURLY=0, MONTHLY=1, QUARTERLY=3, SEMIANNUAL=6, ANNUAL=12 |
 | `BillingPeriod` | HOURLY=0, MONTHLY=30, MONTHLY_ALIGNED=31 |
 | `OSType` | WINDOWS="win", LINUX="lin" |
-| `TermConflictCode` | AUTO_RENEWAL_CONSENT_REQUIRED, AUTO_RENEWAL_NOT_APPLICABLE, TERM_RENEWAL_IN_PROGRESS (отказ `start()` и `reinstall_os()`; строковые `error_code` 409-отказов по сроку, зеркало констант `user_panel.services.term_obligation`; у сервера есть и другие коды срока) |
-| `TermState` | NOT_TERM_PLAN="not_term_plan", ACTIVE="active", PENDING_CONSENT="pending_consent", GRANDFATHERED="grandfathered", LEGACY_EXPIRED="legacy_expired", CONFIRMED_EXPIRED="confirmed_expired" (строковые коды `CloudServer.term_state`, зеркало `user_panel.consts.TermState`) |
+| `TermConflictCode` | AUTO_RENEWAL_CONSENT_REQUIRED, AUTO_RENEWAL_NOT_APPLICABLE, TERM_RENEWAL_IN_PROGRESS, TERM_CONDITIONS_REQUIRED, LEGAL_TYPE_REQUIRED, LEGACY_TERMS_CONSENT_REQUIRED, AFFORDABLE_LAUNCH_UNDER_TERM, TERM_TERMINATION_REQUIRED (строковые `error_code` 409/400-отказов по сроку, достижимые токеном; зеркало `user_panel.services.term_obligation`; панельные коды подписи в SDK не перечислены) |
+| `TermState` | NOT_TERM_PLAN="not_term_plan", ACTIVE="active", PENDING_CONSENT="pending_consent", GRANDFATHERED="grandfathered", LEGACY_EXPIRED="legacy_expired", CONFIRMED_EXPIRED="confirmed_expired", NO_SNAPSHOT="no_snapshot" (главное значение для неподписанного черновика и сервера после смены тарифа; строковые коды `CloudServer.term_state`, зеркало `user_panel.consts.TermState`; правила срока действуют с даты включения новой редакции оферты, 26.11.2026) |
 
 ## API-эндпоинты
 
@@ -151,7 +151,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**247 тестов**, все проходят в Docker.
+**242 теста**, все проходят в Docker.
 
 ### Запуск
 
@@ -205,8 +205,8 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 ## Важные контракты API v2
 
 - **`create()` → POST `cloud-servers/`** (canonical). Старый `server-orders/` теперь GET-only (deep-link handler).
-- **`create()` payload**: `{name, flavor_id (int PK FlavorConfig), ssd_count (min 30 GB), os_id, price_plan, promocode_id?, is_in_queue?, addon_ids?}`. CPU/RAM/GPU фиксируются флейвором — отдельно не передаются.
-- **`migrate()` payload**: `{flavor_id (int), price_plan}`. CPU/RAM/GPU тоже из флейвора.
+- **`create()` payload**: `{name, flavor_id (int PK FlavorConfig), ssd_count (128-2048 ГБ, шаг 128; `servers/consts.py` сервера), os_id, price_plan, promocode_id?, is_in_queue?, addon_ids?, ssh_key_ids?}`. CPU/RAM/GPU фиксируются флейвором — отдельно не передаются.
+- **`migrate()` payload**: `{flavor_id (int), price_plan, ssd_count?}`. Только диск остановленному серверу с томом: передать ТЕКУЩИЕ flavor_id и price_plan, иначе 400 `change_one_at_a_time`; ещё 404 `feature_disabled`, 409 `not_draft`, `disk_operation_pending`, `TERM_TERMINATION_REQUIRED`. CPU/RAM/GPU тоже из флейвора.
 - **OSImage.compatible_flavor_ids** — список совместимых FlavorConfig. Пустой список = универсальный образ. (Раньше было `compatible_gpu_ids` — переименовано на сервере.)
 - **Фильтры OSImages**: `flavor_id` (точно) или `gpu_id` (через flavor.gpu_id). Без фильтра — только универсальные образы.
 - **`queue_disabled` + `suggested_alternative`** (есть и у `Flavor`, и у `CloudServer`) — карта в долгосрочной аренде, очередь на неё сервер отбивает **409**. `suggested_alternative` (модель `FlavorSubstitution`) заполняется ТОЛЬКО когда `queue_disabled` И `max_available == 0`; при наличии ёмкости там `None` — сервер не гоняет подбор замены зря. Поле `exact_match=False` значит, что точного эквивалента по cpu/ram на карте-замене нет и подобран ближайший.
@@ -250,7 +250,7 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
   | `term_renewal_accepted_at` | `Optional[str]` (ISO) | поле модели | клиент нажал «продлить на тех же условиях»; новый срок стартует по истечении текущего |
   | `term_outage_shift_hours` | `int`, дефолт 0 | property (`term_outage_shift_seconds // 3600`) | учтённый сдвиг конца срока за наш простой, часы вниз |
   | `term_outage_active` | `bool` | property | прямо сейчас сервер лежит по нашей вине, конец срока уезжает |
-  | `term_state` | `str`, дефолт `""` | property | код из `TermState`; `""` = сервер до реформы, ничего не сказал. Неизвестный код НЕ подменять |
+  | `term_state` | `str`, дефолт `""` | property | код из `TermState`; `""` = только старый сервер, который поле не шлёт; у срочного тарифа без снимка приходит `no_snapshot`. Неизвестный код НЕ подменять |
   | `has_term_snapshot` | `bool` | property | снимок применим к текущему `price_plan` |
   | `is_renewal_mandatory` | `bool` | property | срок идёт и подтверждён: платежи внутри срока спишутся независимо от тумблера, выход только «прекратить аренду». Выключить тумблер можно (не продлевать после конца срока), включить через API v2 нельзя (409 `AUTO_RENEWAL_CONSENT_REQUIRED`) |
   | `is_bound_by_term` | `bool` | property | досрочное прекращение = пересчёт без скидки (включает `pending_consent`) |

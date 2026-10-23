@@ -44,6 +44,11 @@ class ServerState(IntEnum):
     MIGRATING_SNAPSHOTTING = 302
     MIGRATING_DELETING = 303
     MIGRATING_CREATING = 304
+    # Running server: its network disk is being extended (the VM keeps working).
+    DISK_EXTENDING = 350
+    # A stopped server with an ordered disk size is starting: the volume grows
+    # and the usage act is not created yet.
+    DISK_EXTENDING_ON_START = 360
     CLONING = 400
     QUEUED = 500
     AWAITING_PASSWORD = 600
@@ -98,11 +103,18 @@ class TermState:
     PENDING_CONSENT = "pending_consent"
     """Conditions accepted, snapshot written, dates not set yet: the first usage act starts the term."""
     GRANDFATHERED = "grandfathered"
-    """Legacy configuration without dates and without consent; dates are filled on start, no gates."""
+    """Legacy configuration without dates and without consent; dates are filled on start.
+
+    Not a free pass: a draft that carries the earlier-terms mark but has no
+    signature still gets 409 ``LEGACY_TERMS_CONSENT_REQUIRED`` on start."""
     LEGACY_EXPIRED = "legacy_expired"
     """Legacy term expired without consent: re-armed on start for the same length with its own discount."""
     CONFIRMED_EXPIRED = "confirmed_expired"
     """A confirmed term ended: no discount until a new consent is given."""
+    NO_SNAPSHOT = "no_snapshot"
+    """A term plan without an applicable snapshot. The main value for an unsigned
+    draft and for a server after a plan change: a new term needs the customer's
+    consent (``CloudServer.requires_term_consent``)."""
 
 
 class ServerCreateRejectReason:
@@ -142,7 +154,8 @@ class TermConflictCode:
 
     AUTO_RENEWAL_CONSENT_REQUIRED = "AUTO_RENEWAL_CONSENT_REQUIRED"
     """``update(is_auto_renewal=True)`` under a running confirmed term
-    (``CloudServer.is_renewal_mandatory``). Turning auto-renewal on extends the
+    (``CloudServer.is_renewal_mandatory``), whatever the reason (also a plan no
+    longer on sale: the token caller gets this code first). Turning auto-renewal on extends the
     term: only the customer can do it, with the switch on the server card in the
     web panel, never via API v2 (no consent window since 2026-09-29)."""
     AUTO_RENEWAL_NOT_APPLICABLE = "AUTO_RENEWAL_NOT_APPLICABLE"
@@ -152,7 +165,7 @@ class TermConflictCode:
     ended and was neither stopped nor renewed."""
     TERM_RENEWAL_IN_PROGRESS = "TERM_RENEWAL_IN_PROGRESS"
     """``start()`` or ``reinstall_os()`` hit the short window while the term is
-    being renewed: retry in about a minute."""
+    being renewed. Retry later."""
     TERM_CONDITIONS_REQUIRED = "TERM_CONDITIONS_REQUIRED"
     """``start()``, ``reinstall_os()`` or ``migrate()``
     would open a rental term (``CloudServer.requires_term_consent``) or change a
@@ -169,9 +182,6 @@ class TermConflictCode:
     """``start(run_on_affordable_time=True)`` on a rental term: the term is
     signed for the full billing period, so a start for the affordable time is
     refused. Top up the balance by the payment amount instead."""
-    AUTO_RENEWAL_PLAN_WITHDRAWN = "AUTO_RENEWAL_PLAN_WITHDRAWN"
-    """``update(is_auto_renewal=True)`` under a running term whose plan is no
-    longer on sale: there would be nothing to renew into."""
     TERM_TERMINATION_REQUIRED = "TERM_TERMINATION_REQUIRED"
     """``delete()`` (and a change of the configuration that would leave the term)
     under a running confirmed term (``CloudServer.is_renewal_mandatory``): the

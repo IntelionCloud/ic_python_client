@@ -205,7 +205,7 @@ class TestCreateSshKeys:
         respx_mock.post("cloud-servers/").respond(201, json=SAMPLE_CLOUD_SERVER)
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         client.cloud_servers.create(
-            name="n", flavor_id=1, ssd_count=50, os_id=1, ssh_key_ids=[3, 4]
+            name="n", flavor_id=1, ssd_count=128, os_id=1, ssh_key_ids=[3, 4]
         )
         client.close()
         assert json.loads(respx_mock.calls[0].request.content)["ssh_key_ids"] == [3, 4]
@@ -215,9 +215,9 @@ class TestCreateSshKeys:
         """Empty means password only; the key is not added to the body."""
         respx_mock.post("cloud-servers/").respond(201, json=SAMPLE_CLOUD_SERVER)
         client = IntelionCloud(token="tok", base_url=BASE_URL)
-        client.cloud_servers.create(name="n", flavor_id=1, ssd_count=50, os_id=1)
+        client.cloud_servers.create(name="n", flavor_id=1, ssd_count=128, os_id=1)
         client.cloud_servers.create(
-            name="n", flavor_id=1, ssd_count=50, os_id=1, ssh_key_ids=[]
+            name="n", flavor_id=1, ssd_count=128, os_id=1, ssh_key_ids=[]
         )
         client.close()
         for call in respx_mock.calls:
@@ -229,7 +229,7 @@ class TestCreateSshKeys:
         respx_mock.post("cloud-servers/").respond(201, json=SAMPLE_CLOUD_SERVER)
         client = AsyncIntelionCloud(token="tok", base_url=BASE_URL)
         await client.cloud_servers.create(
-            name="n", flavor_id=1, ssd_count=50, os_id=1, ssh_key_ids=[9]
+            name="n", flavor_id=1, ssd_count=128, os_id=1, ssh_key_ids=[9]
         )
         await client.close()
         assert json.loads(respx_mock.calls[0].request.content)["ssh_key_ids"] == [9]
@@ -240,10 +240,10 @@ class TestMigrateDiskSize:
     def test_ssd_count_is_sent(self, respx_mock):
         respx_mock.post("cloud-servers/42/migrate/").respond(200, json=SAMPLE_CLOUD_SERVER)
         client = IntelionCloud(token="tok", base_url=BASE_URL)
-        client.cloud_servers.migrate(42, flavor_id=2, price_plan=1, ssd_count=200)
+        client.cloud_servers.migrate(42, flavor_id=2, price_plan=1, ssd_count=256)
         client.close()
         body = json.loads(respx_mock.calls[0].request.content)
-        assert body == {"flavor_id": 2, "price_plan": 1, "ssd_count": 200}
+        assert body == {"flavor_id": 2, "price_plan": 1, "ssd_count": 256}
 
     @respx.mock(base_url=API_URL)
     def test_not_sent_by_default(self, respx_mock):
@@ -261,32 +261,99 @@ class TestMigrateDiskSize:
     async def test_async_migrate_sends_ssd_count(self, respx_mock):
         respx_mock.post("cloud-servers/42/migrate/").respond(200, json=SAMPLE_CLOUD_SERVER)
         client = AsyncIntelionCloud(token="tok", base_url=BASE_URL)
-        await client.cloud_servers.migrate(42, flavor_id=2, price_plan=1, ssd_count=64)
+        await client.cloud_servers.migrate(42, flavor_id=2, price_plan=1, ssd_count=128)
         await client.close()
-        assert json.loads(respx_mock.calls[0].request.content)["ssd_count"] == 64
+        assert json.loads(respx_mock.calls[0].request.content)["ssd_count"] == 128
 
 
-class TestTermConflictCodes:
-    """Codes of v2 refusals that the SDK lists (values mirror ``term_obligation`` on the server)."""
+class TestMirrorsServerConstants:
+    """Values copied from ``user_panel/consts.py`` and ``term_obligation.py`` on the server (origin/main, 2026-10-23)."""
 
-    @pytest.mark.parametrize(
-        "name",
-        [
-            "AUTO_RENEWAL_CONSENT_REQUIRED",
-            "AUTO_RENEWAL_NOT_APPLICABLE",
-            "AUTO_RENEWAL_PLAN_WITHDRAWN",
-            "TERM_RENEWAL_IN_PROGRESS",
-            "TERM_CONDITIONS_REQUIRED",
-            "LEGAL_TYPE_REQUIRED",
-            "LEGACY_TERMS_CONSENT_REQUIRED",
-            "AFFORDABLE_LAUNCH_UNDER_TERM",
-            "TERM_TERMINATION_REQUIRED",
-        ],
-    )
-    def test_value_is_the_name(self, name):
+    SERVER_USER_CONFIG_STATE = {
+        "IDLE": 0, "STARTING": 100, "SHELVING": 200,
+        "MIGRATING_SHELVING": 301, "MIGRATING_SNAPSHOTTING": 302,
+        "MIGRATING_DELETING": 303, "MIGRATING_CREATING": 304,
+        "DISK_EXTENDING": 350, "DISK_EXTENDING_ON_START": 360,
+        "CLONING": 400, "QUEUED": 500, "AWAITING_PASSWORD": 600,
+        "MAINTENANCE": 700, "CLEANUP_IN_PROGRESS": 800, "REINSTALLING": 900,
+        "COLD_MOVING": 950, "COLD_STORAGE": 1000, "COLD_GRACE": 1100,
+    }
+    SERVER_TERM_STATE = {
+        "NOT_TERM_PLAN": "not_term_plan", "ACTIVE": "active",
+        "PENDING_CONSENT": "pending_consent", "GRANDFATHERED": "grandfathered",
+        "LEGACY_EXPIRED": "legacy_expired", "CONFIRMED_EXPIRED": "confirmed_expired",
+        "NO_SNAPSHOT": "no_snapshot",
+    }
+    SERVER_TERM_CODES = {
+        "AUTO_RENEWAL_CONSENT_REQUIRED": "AUTO_RENEWAL_CONSENT_REQUIRED",
+        "AUTO_RENEWAL_NOT_APPLICABLE": "AUTO_RENEWAL_NOT_APPLICABLE",
+        "TERM_RENEWAL_IN_PROGRESS": "TERM_RENEWAL_IN_PROGRESS",
+        "TERM_CONDITIONS_REQUIRED": "TERM_CONDITIONS_REQUIRED",
+        "LEGAL_TYPE_REQUIRED": "LEGAL_TYPE_REQUIRED",
+        "LEGACY_TERMS_CONSENT_REQUIRED": "LEGACY_TERMS_CONSENT_REQUIRED",
+        "AFFORDABLE_LAUNCH_UNDER_TERM": "AFFORDABLE_LAUNCH_UNDER_TERM",
+        "TERM_TERMINATION_REQUIRED": "TERM_TERMINATION_REQUIRED",
+    }
+
+    def test_server_state_matches_server(self):
+        from intelion_cloud import ServerState
+
+        assert {m.name: m.value for m in ServerState} == self.SERVER_USER_CONFIG_STATE
+
+    def test_disk_extending_states(self):
+        from intelion_cloud import ServerState
+
+        assert ServerState.DISK_EXTENDING == 350
+        assert ServerState.DISK_EXTENDING_ON_START == 360
+
+    def test_term_state_matches_server(self):
+        from intelion_cloud import TermState
+
+        mine = {k: v for k, v in vars(TermState).items() if k.isupper()}
+        assert mine == self.SERVER_TERM_STATE
+
+    def test_term_conflict_codes_match_server(self):
         from intelion_cloud import TermConflictCode
 
-        assert getattr(TermConflictCode, name) == name
+        mine = {k: v for k, v in vars(TermConflictCode).items() if k.isupper()}
+        assert mine == self.SERVER_TERM_CODES
+
+    def test_unreachable_plan_withdrawn_code_is_not_listed(self):
+        from intelion_cloud import TermConflictCode
+
+        assert not hasattr(TermConflictCode, "AUTO_RENEWAL_PLAN_WITHDRAWN")
+
+    def test_no_snapshot_state_is_read_from_server(self):
+        server = CloudServer.from_dict({**SAMPLE_CLOUD_SERVER, "term_state": "no_snapshot"})
+        assert server.term_state == "no_snapshot"
+
+
+class TestErrorCodeCarriesDiskCodes:
+    @respx.mock(base_url=API_URL)
+    def test_migrate_disk_refusal_code(self, respx_mock):
+        from intelion_cloud import ConflictError
+
+        respx_mock.post("cloud-servers/42/migrate/").respond(
+            409, json={"error_code": "not_draft", "detail": "running"}
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(ConflictError) as info:
+            client.cloud_servers.migrate(42, flavor_id=1, price_plan=0, ssd_count=256)
+        client.close()
+        assert info.value.error_code == "not_draft"
+
+    @respx.mock(base_url=API_URL)
+    def test_feature_disabled_is_not_found(self, respx_mock):
+        from intelion_cloud import NotFoundError
+
+        respx_mock.post("cloud-servers/42/migrate/").respond(
+            404, json={"error_code": "feature_disabled", "detail": "off"}
+        )
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(NotFoundError) as info:
+            client.cloud_servers.migrate(42, flavor_id=1, price_plan=0, ssd_count=256)
+        client.close()
+        assert info.value.error_code == "feature_disabled"
 
     @respx.mock(base_url=API_URL)
     def test_error_code_is_read_from_the_409(self, respx_mock):

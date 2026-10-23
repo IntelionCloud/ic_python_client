@@ -132,7 +132,7 @@ class TestCreateRejectReason:
         )
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         with pytest.raises(ValidationError) as exc_info:
-            client.cloud_servers.create(name="x", flavor_id=1, ssd_count=50, os_id=1)
+            client.cloud_servers.create(name="x", flavor_id=1, ssd_count=128, os_id=1)
         assert exc_info.value.reason == "cpu_limit"
         assert exc_info.value.reason == ServerCreateRejectReason.CPU_LIMIT
         client.close()
@@ -150,7 +150,7 @@ class TestCreateRejectReason:
         )
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         with pytest.raises(ConflictError) as exc_info:
-            client.cloud_servers.create(name="x", flavor_id=1, ssd_count=50, os_id=1, is_in_queue=True)
+            client.cloud_servers.create(name="x", flavor_id=1, ssd_count=128, os_id=1, is_in_queue=True)
         assert exc_info.value.reason == "queue_disabled"
         assert exc_info.value.response_body["queue_disabled"] is True
         client.close()
@@ -161,7 +161,7 @@ class TestCreateRejectReason:
         respx_mock.post("cloud-servers/").respond(400, json={"name": ["This field is required."]})
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         with pytest.raises(ValidationError) as exc_info:
-            client.cloud_servers.create(name="", flavor_id=1, ssd_count=50, os_id=1)
+            client.cloud_servers.create(name="", flavor_id=1, ssd_count=128, os_id=1)
         assert exc_info.value.reason is None
         assert exc_info.value.field_errors == {"name": ["This field is required."]}
         client.close()

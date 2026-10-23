@@ -53,12 +53,15 @@ class APIError(IntelionCloudError):
 
     @property
     def error_code(self) -> Optional[str]:
-        """Machine-readable ``error_code`` of rental-term refusals, when present.
+        """Machine-readable ``error_code`` of term and disk refusals, when present.
 
         The term guards on the server answer with
         ``{"error_code", "message", "detail"}`` (see
         :class:`~intelion_cloud.constants.TermConflictCode`). Branch on this,
-        not on the Russian message. ``None`` for bodies without the key.
+        not on the Russian message. The disk order of ``migrate(ssd_count=)``
+        reports its codes here too (``change_one_at_a_time``, ``not_draft``,
+        ``disk_operation_pending``, ``feature_disabled``). ``None`` for bodies
+        without the key.
         """
         if isinstance(self.response_body, dict):
             value = self.response_body.get("error_code")

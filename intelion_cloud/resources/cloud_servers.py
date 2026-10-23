@@ -65,14 +65,16 @@ class CloudServers(SyncResource):
         Args:
             name: Server display name.
             flavor_id: FlavorConfig primary key. CPU/RAM/GPU are fixed by the flavor.
-            ssd_count: Network disk size in GB (min 30). Maps to ``network_disk_count`` server-side.
+            ssd_count: Network disk size in GB: 128 to 2048, a multiple of 128. Maps to ``network_disk_count`` server-side.
             os_id: Operating system image ID (must be compatible with the flavor).
             price_plan: Billing plan (use :class:`~intelion_cloud.constants.PricePlan`).
             promocode_id: Promotional code ID to apply.
             is_in_queue: If True, queue the order when hardware is unavailable.
             addon_ids: Software addon IDs to install at first boot.
             ssh_key_ids: IDs of your SSH keys (see ``ssh_keys.list()``) to inject
-                in addition to the password.
+                in addition to the password. Pass only IDs of your own existing
+                keys: a foreign or deleted ID currently makes the server answer
+                500 and leaves an orphan draft.
         """
         payload: Dict[str, Any] = {
             "name": name,
@@ -150,8 +152,7 @@ class CloudServers(SyncResource):
 
         Raises :class:`~intelion_cloud.exceptions.ConflictError` with
         ``error_code == "TERM_RENEWAL_IN_PROGRESS"`` if the start hits the
-        short window while the term is being renewed: retry in about a
-        minute. Other term refusals (for example ``TERM_CONDITIONS_REQUIRED``)
+        short window while the term is being renewed. Other term refusals (for example ``TERM_CONDITIONS_REQUIRED``)
         come the same way, see
         :attr:`~intelion_cloud.exceptions.APIError.error_code`.
         """
@@ -203,8 +204,7 @@ class CloudServers(SyncResource):
 
         Raises :class:`~intelion_cloud.exceptions.ConflictError` with
         ``error_code`` ``"TERM_CONDITIONS_REQUIRED"`` (sign the term
-        conditions in the web panel), ``"TERM_RENEWAL_IN_PROGRESS"`` (retry in
-        about a minute) or ``"LEGACY_TERMS_CONSENT_REQUIRED"``, and
+        conditions in the web panel), ``"TERM_RENEWAL_IN_PROGRESS"`` or ``"LEGACY_TERMS_CONSENT_REQUIRED"``, and
         :class:`~intelion_cloud.exceptions.ValidationError` (400) when the
         balance does not cover a new period. Nothing is changed on refusal.
         """
@@ -248,16 +248,25 @@ class CloudServers(SyncResource):
         term conditions accepted in the web panel for this exact flavor and term
         before the call. Otherwise the call fails with ``ConflictError`` (409),
         ``error_code`` ``TERM_CONDITIONS_REQUIRED``, and nothing is changed. This
-        applies to a running server and, since 0.7.0, to a server that has not
-        been started yet (including one with conditions accepted for another
-        flavor or term).
+        applies to a running server and to a server that has not been started
+        yet (including one with conditions accepted for another flavor or
+        term). The term rules are in force from the date the new offer edition
+        takes effect on the server (26.11.2026); until then term plans run on
+        the earlier terms.
 
-        ``ssd_count`` (network disk size in GB, the same bounds and step as in
-        :meth:`create`) is optional: on a draft without a volume it sets the
-        size at once, on a stopped server with a volume it orders the size for
-        the next start (``CloudServer.disk_extend_order``), a running server
-        refuses it (the disk of a running server grows with extend-disk in the
-        web panel).
+        ``ssd_count`` (network disk size in GB, 128 to 2048, a multiple of 128)
+        is optional. Disk and hardware/plan are changed by separate requests: to
+        order ONLY the disk of a stopped server with a volume, pass its CURRENT
+        ``flavor_id`` and ``price_plan``, otherwise the server answers 400
+        ``change_one_at_a_time``. On a draft without a volume the size is
+        written at once; on a stopped server with a volume it is an order for
+        the next start (``CloudServer.disk_extend_order``). Refusals (read the
+        code through :attr:`~intelion_cloud.exceptions.APIError.error_code`):
+        404 ``feature_disabled`` (:class:`~intelion_cloud.exceptions.NotFoundError`)
+        while ordering the disk is switched off on the server; 409 ``not_draft``
+        for a running server (its disk grows with extend-disk in the web panel);
+        409 ``disk_operation_pending`` while another disk operation is open;
+        409 ``TERM_TERMINATION_REQUIRED`` under a confirmed term.
         """
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,

@@ -6,7 +6,9 @@ auto-generated list of merged commits on top of this file.
 ## 0.7.0 (unreleased)
 
 Pairs with the pricing-plans revision on the server (rental terms). Do not tag
-before that server change is in production: the fields below would be empty.
+before that server change is in production. The term rules apply from the date
+the new offer edition takes effect on the server (26.11.2026); until then term
+plans run on the earlier terms, and the fields below are filled in all the same.
 
 ### Auto-renewal under a rental term
 
@@ -20,7 +22,7 @@ before that server change is in production: the fields below would be empty.
 - `cloud_servers.start(id, is_auto_renewal=...)` under a term ignores the
   argument: the toggle stays as in the signed consent document, the call still
   succeeds. A start during a term renewal fails with `ConflictError`,
-  `error_code` `TERM_RENEWAL_IN_PROGRESS`: retry in about a minute.
+  `error_code` `TERM_RENEWAL_IN_PROGRESS`.
 - `cloud_servers.migrate(id, flavor_id=..., price_plan=...)` to a price plan
   with a term (1, 3, 6 or 12 months) fails with `ConflictError` (409),
   `error_code` `TERM_CONDITIONS_REQUIRED`, unless the term conditions were
@@ -49,8 +51,10 @@ before that server change is in production: the fields below would be empty.
 - `cloud_servers.start(id)` on a server with a term plan (1, 3, 6 or 12
   months) whose conditions are not signed answers `ConflictError` (409),
   `error_code` `TERM_CONDITIONS_REQUIRED`. Check `CloudServer.requires_term_consent`
-  first: a server rented before the reform without a signature still starts
-  (200) and has `requires_term_consent == False`.
+  first. This refusal exists once the new offer edition is in force on the
+  server (26.11.2026); until then term plans start on the earlier terms (200),
+  and a server rented before the reform without a signature keeps starting
+  (200) with `requires_term_consent == False`.
 - `cloud_servers.stop(id)` under a term only powers the VM off: the term stays
   open and charges continue.
 - `cloud_servers.delete(id)` under a running term answers `ConflictError` (409),
@@ -94,9 +98,15 @@ every method field as `string`).
   the next start on a stopped server.
 - `TermConflictCode`: `TERM_CONDITIONS_REQUIRED`, `LEGAL_TYPE_REQUIRED`,
   `LEGACY_TERMS_CONSENT_REQUIRED`, `AFFORDABLE_LAUNCH_UNDER_TERM`,
-  `AUTO_RENEWAL_PLAN_WITHDRAWN`, `TERM_TERMINATION_REQUIRED`. Panel-only codes
+  `TERM_TERMINATION_REQUIRED` (`AUTO_RENEWAL_CONSENT_REQUIRED` was already
+  there; a token caller gets it also for a plan no longer on sale). Panel-only codes
   (`TERM_TEXT_MISMATCH`, `TERM_CONSENT_NOT_APPLICABLE`, `SIGNED_BY_STAFF_FORBIDDEN`
   and others) come from the document-signing endpoints the SDK does not wrap.
+- `TermState.NO_SNAPSHOT` (`"no_snapshot"`): the main `term_state` of a term
+  plan without a snapshot (every unsigned draft, a server after a plan change).
+  `ServerState.DISK_EXTENDING` (350) and `DISK_EXTENDING_ON_START` (360).
+- `ColdFreeWindow.hour_price_rub_cents` and `month_price_rub_cents` are `None`
+  (not 0) when the server cannot determine the boot disk size.
 - `User.invalid_name` stays for compatibility, but `UserSerializer` on the
   server does not send it; it is always `False`.
 

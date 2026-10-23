@@ -84,12 +84,19 @@ class TestColdFreeWindowModel:
             {
                 "free_until_dt": "2026-09-20T12:00:00+03:00",
                 "storage_gb": None,
-                "hour_price_rub_cents": 0,
-                "month_price_rub_cents": 0,
+                "hour_price_rub_cents": None,
+                "month_price_rub_cents": None,
             }
         )
         assert w.storage_gb is None
+        # null stays None: 0 would read as "storage is free"
+        assert w.hour_price_rub_cents is None
+        assert w.month_price_rub_cents is None
+
+    def test_real_zero_price_stays_zero(self):
+        w = ColdFreeWindow.from_dict({"hour_price_rub_cents": 0, "month_price_rub_cents": 0})
         assert w.hour_price_rub_cents == 0
+        assert w.month_price_rub_cents == 0
 
     def test_free_window_already_over_is_kept_as_is(self):
         """``free_until_dt`` in the past means billing starts within the hour; not normalised away."""

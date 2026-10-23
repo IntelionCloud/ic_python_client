@@ -245,8 +245,9 @@ class ColdFreeWindow:
     free_until_dt: Optional[str] = None
     storage_gb: Optional[str] = None
     """Boot volume size as a decimal string; ``None`` when it cannot be determined."""
-    hour_price_rub_cents: int = 0
-    month_price_rub_cents: int = 0
+    hour_price_rub_cents: Optional[int] = None
+    """``None`` when the boot disk size cannot be determined (the server sends ``null``)."""
+    month_price_rub_cents: Optional[int] = None
     free_hours: Optional[int] = None
     """Length of the free window of THIS server in hours, counted from its stop.
 
@@ -260,8 +261,8 @@ class ColdFreeWindow:
         return cls(
             free_until_dt=_get(data, "free_until_dt"),
             storage_gb=_get(data, "storage_gb"),
-            hour_price_rub_cents=data.get("hour_price_rub_cents", 0) or 0,
-            month_price_rub_cents=data.get("month_price_rub_cents", 0) or 0,
+            hour_price_rub_cents=_get(data, "hour_price_rub_cents"),
+            month_price_rub_cents=_get(data, "month_price_rub_cents"),
             free_hours=_get(data, "free_hours"),
         )
 
@@ -384,7 +385,11 @@ class CloudServer:
     has_term_snapshot: bool = False
     """The snapshot above applies to the current ``price_plan``."""
     is_renewal_mandatory: bool = False
-    """Term is running and was confirmed: auto-renewal cannot be switched off."""
+    """Term is running and was confirmed: payments inside the term are due regardless of auto-renewal.
+
+    The toggle can always be switched OFF (it then means "do not renew after the end of the term");
+    switching it ON under the term is possible only by the customer in the web panel.
+    """
     requires_term_consent: bool = False
     """Starting the server will open a new term, consent must be collected first."""
     term_renewal_accepted_at: Optional[str] = None
@@ -394,9 +399,19 @@ class CloudServer:
     term_outage_active: bool = False
     """The server is down on our side right now and ``term_ends_at`` keeps moving forward."""
     term_state: str = ""
-    """One of :class:`intelion_cloud.constants.TermState`; ``""`` when the server predates the reform."""
+    """One of :class:`intelion_cloud.constants.TermState`; ``""`` only on an older server that does not send it.
+
+    ``no_snapshot`` is the main value for a term plan without a snapshot: every unsigned draft
+    and every server after a plan change. Rules of the term apply from the date the new edition of
+    the offer takes effect on the server (26.11.2026); before that term plans run on the earlier
+    terms and the fields are filled in all the same.
+    """
     is_bound_by_term: bool = False
-    """Stopping the rental early triggers recalculation without the term discount."""
+    """Leaving the rental early triggers recalculation without the term discount.
+
+    The recalculation and its extra payment apply to companies and sole proprietors; an individual
+    has no extra payment.
+    """
     term_renewal_available: bool = False
     """The renewal window is open right now. Renewal itself is a personal-account action, not API v2."""
     term_renewal_pending: bool = False
@@ -412,6 +427,9 @@ class CloudServer:
     it started with. Without a snapshot the server falls back to the live
     :attr:`User.is_term_business`. Only companies and sole proprietors with
     filled-in details pay monthly; individuals pay the whole term at once.
+    The rule is in force from the date the new offer edition takes effect on
+    the server (26.11.2026); until then term plans run on the earlier terms,
+    and this field is filled in all the same.
     """
     disk_extend_order: Optional[DiskExtendOrder] = None
     """Disk size ordered while the server is stopped and applied at the next start; ``None`` if no order."""
@@ -508,7 +526,7 @@ class ServerStatus:
     is_enough_money_for_full_period: Optional[bool] = None
     """Whether the free balance covers the whole next billing period."""
     remaining_monthly_seconds: Optional[int] = None
-    """Seconds left in the current billing cycle; 0 when no cycle is running."""
+    """Seconds left in the current billing cycle; 0 when no cycle is running, ``None`` for a draft."""
     launch_required_rub_cents: Optional[int] = None
     """Free balance required right now for the start to go through (kopecks).
 
@@ -521,7 +539,8 @@ class ServerStatus:
     launch_funds_rub_cents: Optional[int] = None
     """The client's money the start gate compares with ``launch_required_rub_cents`` (kopecks).
 
-    Server-side ``UserConfiguration.payment_funds_rub_cents``. A term plan paid
+    The funds that pay for this start (``UserConfiguration.payment_funds_rub_cents``)
+    minus the money reserved by the client's other launches. A term plan paid
     by an individual: own money only, balance minus frozen, WITHOUT the
     overdraft limit (Terms, cl. 8.5), so it can be negative. A term plan paid
     by a business (legal entity or sole proprietor per the client-kind

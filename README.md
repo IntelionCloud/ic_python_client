@@ -35,7 +35,7 @@ client.cloud_servers.stop(server_id=42)
 new_server = client.cloud_servers.create(
     name="my-h100-box",
     flavor_id=1,          # FlavorConfig PK
-    ssd_count=100,        # network disk size, GB (min 30)
+    ssd_count=128,        # network disk size, GB (128 to 2048, step 128)
     os_id=1,              # OperationalSystemImage PK
     price_plan=0,         # 0 = hourly, 1 = monthly, ...
 )

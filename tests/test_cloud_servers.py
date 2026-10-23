@@ -157,7 +157,7 @@ class TestCloudServersCreate:
         server = client.cloud_servers.create(
             name="my-gpu-server",
             flavor_id=1,
-            ssd_count=50,
+            ssd_count=128,
             os_id=1,
             price_plan=0,
             addon_ids=[7],
@@ -170,7 +170,7 @@ class TestCloudServersCreate:
         body = json.loads(req.content)
         assert body["name"] == "my-gpu-server"
         assert body["flavor_id"] == 1
-        assert body["ssd_count"] == 50
+        assert body["ssd_count"] == 128
         assert body["os_id"] == 1
         assert body["price_plan"] == 0
         assert body["addon_ids"] == [7]
