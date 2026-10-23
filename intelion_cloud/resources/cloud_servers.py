@@ -251,13 +251,14 @@ class CloudServers(SyncResource):
         applies to a running server and to a server that has not been started
         yet (including one with conditions accepted for another flavor or
         term). The term rules are in force from the date the new offer edition
-        takes effect on the server (26.11.2026); until then term plans run on
+        takes effect on the server (clients are notified in advance); until then term plans run on
         the earlier terms.
 
         ``ssd_count`` (network disk size in GB, 128 to 2048, a multiple of 128)
         is optional. Disk and hardware/plan are changed by separate requests: to
         order ONLY the disk of a stopped server with a volume, pass its CURRENT
-        ``flavor_id`` and ``price_plan``, otherwise the server answers 400
+        ``flavor_id`` (the ``Flavor.id`` whose ``openstack_id`` equals
+        ``CloudServer.flavor_oid``) and ``price_plan``, otherwise the server answers 400
         ``change_one_at_a_time``. On a draft without a volume the size is
         written at once; on a stopped server with a volume it is an order for
         the next start (``CloudServer.disk_extend_order``). Refusals (read the

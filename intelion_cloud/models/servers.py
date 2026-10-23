@@ -403,7 +403,7 @@ class CloudServer:
 
     ``no_snapshot`` is the main value for a term plan without a snapshot: every unsigned draft
     and every server after a plan change. Rules of the term apply from the date the new edition of
-    the offer takes effect on the server (26.11.2026); before that term plans run on the earlier
+    the offer takes effect on the server (clients are notified in advance); before that term plans run on the earlier
     terms and the fields are filled in all the same.
     """
     is_bound_by_term: bool = False
@@ -428,7 +428,7 @@ class CloudServer:
     :attr:`User.is_term_business`. Only companies and sole proprietors with
     filled-in details pay monthly; individuals pay the whole term at once.
     The rule is in force from the date the new offer edition takes effect on
-    the server (26.11.2026); until then term plans run on the earlier terms,
+    the server (clients are notified in advance); until then term plans run on the earlier terms,
     and this field is filled in all the same.
     """
     disk_extend_order: Optional[DiskExtendOrder] = None
@@ -526,7 +526,7 @@ class ServerStatus:
     is_enough_money_for_full_period: Optional[bool] = None
     """Whether the free balance covers the whole next billing period."""
     remaining_monthly_seconds: Optional[int] = None
-    """Seconds left in the current billing cycle; 0 when no cycle is running, ``None`` for a draft."""
+    """Seconds left in the current billing cycle; ``None`` when no cycle is running."""
     launch_required_rub_cents: Optional[int] = None
     """Free balance required right now for the start to go through (kopecks).
 

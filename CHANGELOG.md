@@ -7,7 +7,7 @@ auto-generated list of merged commits on top of this file.
 
 Pairs with the pricing-plans revision on the server (rental terms). Do not tag
 before that server change is in production. The term rules apply from the date
-the new offer edition takes effect on the server (26.11.2026); until then term
+the new offer edition takes effect on the server (clients are notified in advance); until then term
 plans run on the earlier terms, and the fields below are filled in all the same.
 
 ### Auto-renewal under a rental term
@@ -52,7 +52,7 @@ plans run on the earlier terms, and the fields below are filled in all the same.
   months) whose conditions are not signed answers `ConflictError` (409),
   `error_code` `TERM_CONDITIONS_REQUIRED`. Check `CloudServer.requires_term_consent`
   first. This refusal exists once the new offer edition is in force on the
-  server (26.11.2026); until then term plans start on the earlier terms (200),
+  server (clients are notified in advance); until then term plans start on the earlier terms (200),
   and a server rented before the reform without a signature keeps starting
   (200) with `requires_term_consent == False`.
 - `cloud_servers.stop(id)` under a term only powers the VM off: the term stays
