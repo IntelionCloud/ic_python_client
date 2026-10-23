@@ -129,10 +129,15 @@ class TermConflictCode:
     Read them through :attr:`intelion_cloud.exceptions.APIError.error_code`.
     Values mirror the constants in ``user_panel.services.term_obligation`` on
     the server. The body is ``{"error_code", "message", "detail"}``; the
-    Russian ``message`` changes with copywriting, branch on the code. The
-    server has other term codes too (``TERM_CONDITIONS_REQUIRED``,
-    ``TERM_TERMINATION_REQUIRED`` and more): compare ``error_code`` with a
-    string when you need one that is not listed here.
+    Russian ``message`` changes with copywriting, branch on the code
+    (``TERM_TERMINATION_REQUIRED`` has ``terminate_url`` instead of ``detail``).
+
+    Only codes an API-token caller can get from API v2 are listed. The
+    document-signing endpoints of the web panel answer with more codes
+    (``TERM_TEXT_MISMATCH``, ``TERM_CONSENT_NOT_APPLICABLE``,
+    ``SIGNED_BY_STAFF_FORBIDDEN`` and others): the SDK has no wrappers for
+    them. Compare ``error_code`` with a string when you need a code that is
+    not listed here.
     """
 
     AUTO_RENEWAL_CONSENT_REQUIRED = "AUTO_RENEWAL_CONSENT_REQUIRED"
@@ -148,3 +153,28 @@ class TermConflictCode:
     TERM_RENEWAL_IN_PROGRESS = "TERM_RENEWAL_IN_PROGRESS"
     """``start()`` or ``reinstall_os()`` hit the short window while the term is
     being renewed: retry in about a minute."""
+    TERM_CONDITIONS_REQUIRED = "TERM_CONDITIONS_REQUIRED"
+    """``start()``, ``reinstall_os()`` or ``migrate()``
+    would open a rental term (``CloudServer.requires_term_consent``) or change a
+    signed one, and the conditions were not accepted for this exact flavor and
+    term. Only the customer can accept them, in the web panel. Nothing is changed."""
+    LEGAL_TYPE_REQUIRED = "LEGAL_TYPE_REQUIRED"
+    """The same entry points: a term plan needs the customer type (individual,
+    sole proprietor or company) filled in the profile first."""
+    LEGACY_TERMS_CONSENT_REQUIRED = "LEGACY_TERMS_CONSENT_REQUIRED"
+    """The server was set up by support on the earlier terms and has not been
+    started yet: the start (and ``migrate()``) waits for the customer to accept
+    the terms in the launch window of the web panel."""
+    AFFORDABLE_LAUNCH_UNDER_TERM = "AFFORDABLE_LAUNCH_UNDER_TERM"
+    """``start(run_on_affordable_time=True)`` on a rental term: the term is
+    signed for the full billing period, so a start for the affordable time is
+    refused. Top up the balance by the payment amount instead."""
+    AUTO_RENEWAL_PLAN_WITHDRAWN = "AUTO_RENEWAL_PLAN_WITHDRAWN"
+    """``update(is_auto_renewal=True)`` under a running term whose plan is no
+    longer on sale: there would be nothing to renew into."""
+    TERM_TERMINATION_REQUIRED = "TERM_TERMINATION_REQUIRED"
+    """``delete()`` (and a change of the configuration that would leave the term)
+    under a running confirmed term (``CloudServer.is_renewal_mandatory``): the
+    way out is the rental termination with recalculation in the web panel; the
+    body carries ``terminate_url``. ``stop()`` is not refused: it only powers
+    the VM off and the payments go on."""

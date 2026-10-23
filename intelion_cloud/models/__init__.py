@@ -17,16 +17,18 @@ from .servers import (
     ColdFreeWindow,
     ColdStorage,
     DebtInfo,
+    DiskExtendOrder,
     PhysicalServer,
     PasswordRotation,
     Promocode,
     ServerStatus,
     SoftwareAddonInstance,
+    UpcomingTermPayment,
     UsageAct,
     WhiteIP,
 )
 from .ssh_keys import SSHKey
-from .users import User
+from .users import ColdStorageSummary, User
 
 __all__ = [
     "GPU",
@@ -42,14 +44,17 @@ __all__ = [
     "ColdFreeWindow",
     "ColdStorage",
     "DebtInfo",
+    "DiskExtendOrder",
     "PhysicalServer",
     "PasswordRotation",
     "Promocode",
     "ServerStatus",
     "SoftwareAddonInstance",
+    "UpcomingTermPayment",
     "UsageAct",
     "WhiteIP",
     "User",
+    "ColdStorageSummary",
     "InferenceApiKey",
     "RotatedInferenceApiKey",
     "InferenceApiKeyUsage",

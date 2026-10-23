@@ -58,6 +58,7 @@ class CloudServers(SyncResource):
         promocode_id: Optional[int] = None,
         is_in_queue: bool = False,
         addon_ids: Optional[List[int]] = None,
+        ssh_key_ids: Optional[List[int]] = None,
     ) -> CloudServer:
         """Create a new cloud server configuration.
 
@@ -70,6 +71,8 @@ class CloudServers(SyncResource):
             promocode_id: Promotional code ID to apply.
             is_in_queue: If True, queue the order when hardware is unavailable.
             addon_ids: Software addon IDs to install at first boot.
+            ssh_key_ids: IDs of your SSH keys (see ``ssh_keys.list()``) to inject
+                in addition to the password.
         """
         payload: Dict[str, Any] = {
             "name": name,
@@ -84,6 +87,8 @@ class CloudServers(SyncResource):
             payload["is_in_queue"] = True
         if addon_ids:
             payload["addon_ids"] = list(addon_ids)
+        if ssh_key_ids:
+            payload["ssh_key_ids"] = list(ssh_key_ids)
 
         data = self._post(_PATH, json=payload)
         return CloudServer.from_dict(data)
@@ -233,6 +238,7 @@ class CloudServers(SyncResource):
         *,
         flavor_id: int,
         price_plan: int,
+        ssd_count: Optional[int] = None,
     ) -> CloudServer:
         """Migrate a server to a different FlavorConfig and/or price plan.
 
@@ -245,11 +251,20 @@ class CloudServers(SyncResource):
         applies to a running server and, since 0.7.0, to a server that has not
         been started yet (including one with conditions accepted for another
         flavor or term).
+
+        ``ssd_count`` (network disk size in GB, the same bounds and step as in
+        :meth:`create`) is optional: on a draft without a volume it sets the
+        size at once, on a stopped server with a volume it orders the size for
+        the next start (``CloudServer.disk_extend_order``), a running server
+        refuses it (the disk of a running server grows with extend-disk in the
+        web panel).
         """
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,
             "price_plan": price_plan,
         }
+        if ssd_count is not None:
+            payload["ssd_count"] = ssd_count
         data = self._post(f"{_PATH}{server_id}/migrate/", json=payload)
         return CloudServer.from_dict(data)
 
@@ -281,6 +296,7 @@ class AsyncCloudServers(AsyncResource):
         promocode_id: Optional[int] = None,
         is_in_queue: bool = False,
         addon_ids: Optional[List[int]] = None,
+        ssh_key_ids: Optional[List[int]] = None,
     ) -> CloudServer:
         payload: Dict[str, Any] = {
             "name": name,
@@ -295,6 +311,8 @@ class AsyncCloudServers(AsyncResource):
             payload["is_in_queue"] = True
         if addon_ids:
             payload["addon_ids"] = list(addon_ids)
+        if ssh_key_ids:
+            payload["ssh_key_ids"] = list(ssh_key_ids)
 
         data = await self._post(_PATH, json=payload)
         return CloudServer.from_dict(data)
@@ -370,10 +388,13 @@ class AsyncCloudServers(AsyncResource):
         *,
         flavor_id: int,
         price_plan: int,
+        ssd_count: Optional[int] = None,
     ) -> CloudServer:
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,
             "price_plan": price_plan,
         }
+        if ssd_count is not None:
+            payload["ssd_count"] = ssd_count
         data = await self._post(f"{_PATH}{server_id}/migrate/", json=payload)
         return CloudServer.from_dict(data)

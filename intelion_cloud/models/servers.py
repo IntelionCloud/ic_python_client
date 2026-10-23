@@ -172,6 +172,14 @@ class SoftwareAddonInstance:
     hardware_mode: str = ""
     last_heartbeat_dt: Optional[str] = None
     has_error: bool = False
+    slug: str = ""
+    """Catalogue slug of the addon (``SoftwareAddon.slug``)."""
+    last_install_log: str = ""
+    """Tail of the install log. The server fills it only when ``status`` is ``"failed"``; ``""`` otherwise."""
+    last_install_log_kind: str = ""
+    """Which step the log belongs to; ``""`` when there is no log."""
+    last_install_log_dt: Optional[str] = None
+    """ISO datetime of the logged attempt; ``None`` when there is no log."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> SoftwareAddonInstance:
@@ -187,6 +195,10 @@ class SoftwareAddonInstance:
             hardware_mode=data.get("hardware_mode", "") or "",
             last_heartbeat_dt=_get(data, "last_heartbeat_dt"),
             has_error=data.get("has_error", False),
+            slug=data.get("slug", "") or "",
+            last_install_log=data.get("last_install_log", "") or "",
+            last_install_log_kind=data.get("last_install_log_kind", "") or "",
+            last_install_log_dt=_get(data, "last_install_log_dt"),
         )
 
 
@@ -235,6 +247,13 @@ class ColdFreeWindow:
     """Boot volume size as a decimal string; ``None`` when it cannot be determined."""
     hour_price_rub_cents: int = 0
     month_price_rub_cents: int = 0
+    free_hours: Optional[int] = None
+    """Length of the free window of THIS server in hours, counted from its stop.
+
+    Servers stopped before the current offer edition took effect keep their
+    old length, so do not show a global constant instead. ``None`` on an
+    older server that does not send it.
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ColdFreeWindow:
@@ -243,7 +262,24 @@ class ColdFreeWindow:
             storage_gb=_get(data, "storage_gb"),
             hour_price_rub_cents=data.get("hour_price_rub_cents", 0) or 0,
             month_price_rub_cents=data.get("month_price_rub_cents", 0) or 0,
+            free_hours=_get(data, "free_hours"),
         )
+
+
+@dataclass(frozen=True)
+class DiskExtendOrder:
+    """Disk size ordered for the next start of a stopped server (PRT-200).
+
+    ``network_disk_count`` and the prices of the server already carry the new
+    size; this block is the only place that keeps the previous one.
+    """
+
+    from_gb: int
+    to_gb: int
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> DiskExtendOrder:
+        return cls(from_gb=data.get("from_gb", 0) or 0, to_gb=data.get("to_gb", 0) or 0)
 
 
 @dataclass(frozen=True)
@@ -377,6 +413,8 @@ class CloudServer:
     :attr:`User.is_term_business`. Only companies and sole proprietors with
     filled-in details pay monthly; individuals pay the whole term at once.
     """
+    disk_extend_order: Optional[DiskExtendOrder] = None
+    """Disk size ordered while the server is stopped and applied at the next start; ``None`` if no order."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CloudServer:
@@ -451,6 +489,37 @@ class CloudServer:
             term_renewal_pending=bool(data.get("term_renewal_pending", False)),
             billing_cycle_months=data.get("billing_cycle_months", 0) or 0,
             pays_term_monthly=bool(data.get("pays_term_monthly", False)),
+            disk_extend_order=_parse_nested(data, "disk_extend_order", DiskExtendOrder),
+        )
+
+
+@dataclass(frozen=True)
+class UpcomingTermPayment:
+    """The nearest mandatory term payment of ANOTHER server of the same client.
+
+    A start and a term renewal draw on the same money, and whoever reserved
+    first gets it (owner's rule of 2026-10-23, PRT-259). The launch window
+    shows this block so the start does not turn into a surprise: after the
+    start there may not be enough left for the renewal.
+    """
+
+    server_id: int
+    server_name: str
+    amount_rub_cents: int
+    """What the renewal cycle of that server will charge, kopecks."""
+    date: Optional[str] = None
+    """ISO datetime of that payment (end of the current act of the other server)."""
+    shortfall_rub_cents: int = 0
+    """How much is missing for that payment after this start, kopecks."""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> UpcomingTermPayment:
+        return cls(
+            server_id=data["server_id"],
+            server_name=data.get("server_name", "") or "",
+            amount_rub_cents=data.get("amount_rub_cents", 0) or 0,
+            date=_get(data, "date"),
+            shortfall_rub_cents=data.get("shortfall_rub_cents", 0) or 0,
         )
 
 
@@ -493,6 +562,12 @@ class ServerStatus:
     rebuild the sum from the profile: a second copy of the rule drifts from the
     gate. ``None`` when ``can_start`` is false or on an older server.
     """
+    upcoming_term_payment: Optional[UpcomingTermPayment] = None
+    """The nearest mandatory term payment of another server that this start would leave unfunded.
+
+    ``None`` when there is no such payment, when the money after the start
+    covers it, when ``can_start`` is false, or on an older server (PRT-259).
+    """
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ServerStatus:
@@ -508,4 +583,5 @@ class ServerStatus:
             remaining_monthly_seconds=_get(data, "remaining_monthly_seconds"),
             launch_required_rub_cents=_get(data, "launch_required_rub_cents"),
             launch_funds_rub_cents=_get(data, "launch_funds_rub_cents"),
+            upcoming_term_payment=_parse_nested(data, "upcoming_term_payment", UpcomingTermPayment),
         )
