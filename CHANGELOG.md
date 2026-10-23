@@ -7,6 +7,8 @@ auto-generated list of merged commits on top of this file.
 
 Pairs with the pricing-plans revision on the server (rental terms). Do not tag
 before that server change is in production: the fields below would be empty.
+`ServerStatus.upcoming_term_payment` additionally needs the launch reservation
+change (PRT-259) in production; until then the field is just `None`.
 
 ### Auto-renewal under a rental term
 
@@ -71,6 +73,41 @@ before that server change is in production: the fields below would be empty.
   without a signed consent (`term_conditions_accepted_at` is empty) still
   launches on the free balance including the limit. `None` when the server
   cannot be started or on an older server.
+
+- `ServerStatus.upcoming_term_payment` (`UpcomingTermPayment`: `server_id`,
+  `server_name`, `amount_rub_cents`, `date`, `shortfall_rub_cents`): the
+  nearest mandatory term payment of another server of the same client that this
+  start would leave unfunded. A start and a term renewal draw on the same money
+  and whoever reserved first gets it (PRT-259). `None` when there is no such
+  payment, the money after the start covers it, or on a server without PRT-259.
+
+### Found by comparing the SDK with the server serializers (PRT-86)
+
+The server sent these, the SDK dropped them silently. Checked against the code
+of the public v2 serializers, not the OpenAPI schema (drf-spectacular types
+every method field as `string`).
+
+- `User`: `overdraft_limit_rub_cents`, `held_up_money_rub`,
+  `bonus_balance_rub_cents`, `is_kyc_needed`, `has_max`, `is_beta_tester`,
+  `is_access_to_aiapi_granted`, `date_joined` and `cold_storage_summary`
+  (`ColdStorageSummary`).
+- `CloudServer.disk_extend_order` (`DiskExtendOrder`: `from_gb`, `to_gb`): the
+  disk size ordered for the next start; the prices and `network_disk_count`
+  already carry the new size.
+- `ColdFreeWindow.free_hours`: length of the free window of this server.
+- `SoftwareAddonInstance`: `slug`, `last_install_log`, `last_install_log_kind`,
+  `last_install_log_dt` (the log is filled only for a failed install).
+- `cloud_servers.create(..., ssh_key_ids=[...])`: the server accepted SSH key
+  IDs, the SDK could not send them.
+- `cloud_servers.migrate(..., ssd_count=...)`: optional disk size, ordered for
+  the next start on a stopped server.
+- `TermConflictCode`: `TERM_CONDITIONS_REQUIRED`, `LEGAL_TYPE_REQUIRED`,
+  `LEGACY_TERMS_CONSENT_REQUIRED`, `AFFORDABLE_LAUNCH_UNDER_TERM`,
+  `AUTO_RENEWAL_PLAN_WITHDRAWN`, `TERM_TERMINATION_REQUIRED`. Panel-only codes
+  (`TERM_TEXT_MISMATCH`, `TERM_CONSENT_NOT_APPLICABLE`, `SIGNED_BY_STAFF_FORBIDDEN`
+  and others) come from the document-signing endpoints the SDK does not wrap.
+- `User.invalid_name` stays for compatibility, but `UserSerializer` on the
+  server does not send it; it is always `False`.
 
 ### Earlier in this release
 

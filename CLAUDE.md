@@ -27,8 +27,8 @@ ic_python_client/
 │   │   ├── components.py   # GPU, CPU, RAM, SSD, OSImage, SoftwareAddon
 │   │   ├── flavors.py      # Flavor, FlavorSubstitution
 │   │   ├── ssh_keys.py     # SSHKey
-│   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, PhysicalServer, SoftwareAddonInstance
-│   │   ├── users.py        # User
+│   │   ├── servers.py      # CloudServer, UsageAct, DebtInfo, Promocode, WhiteIP, ServerStatus, UpcomingTermPayment, DiskExtendOrder, PhysicalServer, SoftwareAddonInstance
+│   │   ├── users.py        # User, ColdStorageSummary
 │   │   └── inference_api_keys.py # InferenceApiKey, RotatedInferenceApiKey, InferenceApiKeyUsage, InferenceApiUsageRange, InferenceApiAccessStatus
 │   └── resources/
 │       ├── _base.py        # SyncResource / AsyncResource (HTTP-методы, пагинация, _delete/_get_text)
@@ -127,7 +127,7 @@ IntelionCloudError (base)
 |--------|-------|----------|----------|
 | **CloudServers** | `list()` | GET `cloud-servers/` | Список серверов (auto-paginate) |
 | | `get(id)` | GET `cloud-servers/{id}/` | Один сервер |
-| | `create(...)` | POST `cloud-servers/` | Создать сервер (canonical) |
+| | `create(...)` | POST `cloud-servers/` | Создать сервер (canonical); `ssh_key_ids` — ключи в добавок к паролю |
 | | `update(id, ...)` | PATCH `cloud-servers/{id}/` | Обновить имя / auto_renewal (под сроком включение 409, см. контракты) |
 | | `start(id)` | POST `cloud-servers/{id}/actions/` | Запустить (status=2); под сроком `is_auto_renewal` игнорируется |
 | | `stop(id)` | POST `cloud-servers/{id}/actions/` | Остановить (status=-1) |
@@ -137,7 +137,7 @@ IntelionCloudError (base)
 | | `get_status(id)` | GET `cloud-servers/{id}/status/` | Можно ли запустить, affordable_runtime, `launch_required_rub_cents`, `launch_funds_rub_cents` |
 | | `get_password(id)` | GET `cloud-servers/{id}/password/` | Пароль Windows |
 | | `clone(id)` | POST `cloud-servers/{id}/clone/` | Клонировать |
-| | `migrate(id, flavor_id, price_plan)` | POST `cloud-servers/{id}/migrate/` | Мигрировать (FlavorConfig PK + price_plan) |
+| | `migrate(id, flavor_id, price_plan, ssd_count=)` | POST `cloud-servers/{id}/migrate/` | Мигрировать (FlavorConfig PK + price_plan); `ssd_count` — заказ объёма диска на следующий запуск |
 | **Flavors** | `list()` | GET `flavors/` | Список flavors |
 | **OSImages** | `list(flavor_id= / gpu_id=)` | GET `os-images/` | ОС-образы (фильтр по FlavorConfig или GPU) |
 | **Users** | `me()` | GET `users/` | Текущий пользователь (первый в списке) |
@@ -151,7 +151,7 @@ IntelionCloudError (base)
 
 ## Тесты
 
-**208 тестов**, все проходят в Docker.
+**247 тестов**, все проходят в Docker.
 
 ### Запуск
 
@@ -266,6 +266,8 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 - **`start(id, is_auto_renewal=...)` под сроком** (`is_bound_by_term`, гард `apply_auto_renewal_on_start`): параметр **игнорируется** молча, ответ 200, тумблер остаётся таким, как в подписанном документе (иначе дефолт вьюхи включал бы продление физлицу, подписавшему «выключено»). Менять тумблер только через `update()`. В окне перезавода срока старт отдаёт **409 `TERM_RENEWAL_IN_PROGRESS`**, повторить через минуту. Тесты: `tests/test_auto_renewal_term.py`.
 - **Согласие на условия, продление и досрочное прекращение живут под `lk/cloud-servers/<id>/...` (session-only, вне схемы API v2), в SDK их методов нет и не должно быть, пока сервер не вынесет их в `/api/v2/`.
 - **`ServerStatus` (`GET cloud-servers/{id}/status/`, вьюха `retrieve_server_can_start`, та же серверная ветка).** Помимо `can_start` и `affordable_runtime_seconds` клиент читает `is_enough_money_for_full_period` (`Optional[bool]`, сервер шлёт 0/1), `remaining_monthly_seconds` (`Optional[int]`) и новые `launch_required_rub_cents` (`Optional[int]`, копейки): сколько свободных денег нужно прямо сейчас, чтобы запуск состоялся, и `launch_funds_rub_cents` (`Optional[int]`, копейки): деньги клиента, с которыми гейт это сравнит (`UserConfiguration.payment_funds_rub_cents`). У физлица на срочном тарифе это только свои деньги без лимита овердрафта (п. 8.5 Условий), поэтому бывает отрицательным; у ЮЛ/ИП на сроке и вне срока свободный баланс с лимитом. Сравнивать два поля как пришли, сумму из профиля не пересобирать. Единственная серверная формула (`services/configuration.launch_required_funds_rub_cents`): остаток идущего цикла, весь следующий акт, либо `0`, когда открытый акт уже покрывает запуск (сервер, выключенный под подтверждённым сроком). Оба `None` при `can_start=False`: сервер тогда числа не считает, а `0` читался бы как «запуск бесплатен». Первые два поля сервер отдавал и раньше, клиент их молча выбрасывал (та же болезнь, что у PR #526). Тесты: `tests/test_status_and_reject_reason.py`.
+- **`ServerStatus.upcoming_term_payment` (`UpcomingTermPayment`, PRT-259).** Ближайший обязательный платёж по сроку ДРУГОГО сервера того же клиента, на который после этого запуска денег не хватит: `server_id`, `server_name`, `amount_rub_cents`, `date` (ISO), `shortfall_rub_cents`. Запуск и продление срока берут деньги одного клиента, кто первым забронировал, тот и получает (решение владельца 23.10.2026). `None`, если такого платежа нет, денег после запуска хватает, `can_start=False` или сервер без PRT-259. Источник: `views/views.py::retrieve_server_can_start` и `services/launch_warnings.py`. Тесты: `TestUpcomingTermPayment` в `tests/test_serializer_sweep_fields.py`.
+- **Сверка с сериализаторами (PRT-86, 23.10.2026).** Состав полей `UserConfigurationSerializer`, `FlavorConfigSerializer`, GPU/CPU/RAM/SSD, `OperationalSystemImageSerializer`, `UserSerializer`, `UsageActShortSerializer`, `UserConfigurationAddonSerializer` сверен с моделями по коду сериализаторов (не по OpenAPI). Нашлось и добавлено: поля `User` (`overdraft_limit_rub_cents`, `held_up_money_rub`, `bonus_balance_rub_cents`, `is_kyc_needed`, `has_max`, `is_beta_tester`, `is_access_to_aiapi_granted`, `date_joined`, `cold_storage_summary`), `CloudServer.disk_extend_order`, `ColdFreeWindow.free_hours`, `SoftwareAddonInstance.slug` и `last_install_log*` (лог сервер заполняет только при `status == "failed"`), аргументы `create(ssh_key_ids=)` и `migrate(ssd_count=)`. Остаток: `User.invalid_name` есть в клиенте, `UserSerializer` его не отдаёт (всегда `False`, оставлено ради совместимости). Не покрыты ресурсами SDK (поля сверялись только у существующих моделей): `UsageActSerializer` (вложен в `events/`), `events/`, `alerts/`, `exchange-rates/`, `dedicated-servers/`, `extend-disk/*`, `vnc-console/`, `metrics/`, `termination-quote/`. Тесты: `tests/test_serializer_sweep_fields.py`. Следующую сверку делать так же: `ast` по `Meta.fields` против `dataclasses.fields`, затем руками методы-поля.
 - **`APIError.reason` и `ServerCreateRejectReason`.** `POST cloud-servers/` кладёт в свои 400/409 тела машинный ярлык `reason` рядом с `detail` (MIAN-412; `cpu_limit` в 400, `queue_disabled` в 409, `validation`/`internal_error` только в серверный лог). Читать через свойство `APIError.reason` (`Optional[str]`, `None` если ключа нет, в том числе у DRF-ошибок валидации с `field_errors`), сравнивать с константами `ServerCreateRejectReason`, а не с русским `detail`: текст меняется при первой правке копирайта.
 - **⚠️ OpenAPI-схема врёт про типы этих полей.** drf-spectacular типизирует любой `SerializerMethodField` как `string`, поэтому в `/api/schema/` `queue_disabled` числится строкой, а `suggested_alternative` и `password_rotation` — тоже строками. Реально это `bool` и два вложенных объекта. Из полей срока под ту же ловушку попадают `term_ends_at` (реально nullable datetime), `requires_term_consent` и `term_renewal_available` (реально `bool`). `pays_term_monthly` и `User.is_term_business` объявлены `BooleanField(read_only=True)`, в схеме они честные `boolean`. Из полей холодного хранения: `cold_storage_planned_at`, `cold_grace_deadline` (nullable datetime), `days_idle` (nullable int), `cold_storage`, `cold_free`, `resume_usage_act` (nullable объекты). Из полей `UsageAct`: `next_charge_rub_cents`, `full_period_cost_rub_cents`, `full_planned_cost_rub_cents` (реально `int`), `promocode_code`, `promocode_discount_value` (реально nullable str / int). Сверять с сериализаторами (`website/servers/serializers.py`, `website/user_panel/serializers.py`), а не со схемой.
 
