@@ -3,10 +3,10 @@
 Notable changes of the `intelion-cloud` SDK. GitHub Releases add an
 auto-generated list of merged commits on top of this file.
 
-## 0.7.0 (unreleased)
+## 0.7.0 (2026-10-23)
 
-Pairs with the pricing-plans revision on the server (rental terms). Do not tag
-before that server change is in production. The term rules apply from the date
+Pairs with the pricing-plans revision on the server (rental terms), which is in
+production since 2026-10-21. The term rules apply from the date
 the new offer edition takes effect on the server (clients are notified in advance); until then term
 plans run on the earlier terms, and the fields below are filled in all the same.
 
