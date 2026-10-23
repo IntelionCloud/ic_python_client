@@ -66,7 +66,7 @@ class TestErrorMapping:
             client.cloud_servers.create(
                 name="",
                 flavor_id=999,
-                ssd_count=30,
+                ssd_count=128,
                 os_id=1,
             )
         assert exc_info.value.field_errors["name"] == ["This field is required."]
@@ -144,7 +144,7 @@ class TestRetryLogic:
             client.cloud_servers.create(
                 name="test",
                 flavor_id=1,
-                ssd_count=30,
+                ssd_count=128,
                 os_id=1,
             )
         assert route.call_count == 1
@@ -174,7 +174,7 @@ class TestRetryLogic:
         server = client.cloud_servers.create(
             name="test",
             flavor_id=1,
-            ssd_count=30,
+            ssd_count=128,
             os_id=1,
         )
         assert server.id == 1

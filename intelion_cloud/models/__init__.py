@@ -14,7 +14,10 @@ from .inference_api_keys import (
 )
 from .servers import (
     CloudServer,
+    ColdFreeWindow,
+    ColdStorage,
     DebtInfo,
+    DiskExtendOrder,
     PhysicalServer,
     PasswordRotation,
     Promocode,
@@ -24,7 +27,7 @@ from .servers import (
     WhiteIP,
 )
 from .ssh_keys import SSHKey
-from .users import User
+from .users import ColdStorageSummary, User
 
 __all__ = [
     "GPU",
@@ -37,7 +40,10 @@ __all__ = [
     "Flavor",
     "FlavorSubstitution",
     "CloudServer",
+    "ColdFreeWindow",
+    "ColdStorage",
     "DebtInfo",
+    "DiskExtendOrder",
     "PhysicalServer",
     "PasswordRotation",
     "Promocode",
@@ -46,6 +52,7 @@ __all__ = [
     "UsageAct",
     "WhiteIP",
     "User",
+    "ColdStorageSummary",
     "InferenceApiKey",
     "RotatedInferenceApiKey",
     "InferenceApiKeyUsage",

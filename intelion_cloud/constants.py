@@ -8,6 +8,9 @@ __all__ = [
     "PricePlan",
     "BillingPeriod",
     "OSType",
+    "TermState",
+    "ServerCreateRejectReason",
+    "TermConflictCode",
     "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
     "DEFAULT_CONNECT_TIMEOUT",
@@ -41,10 +44,22 @@ class ServerState(IntEnum):
     MIGRATING_SNAPSHOTTING = 302
     MIGRATING_DELETING = 303
     MIGRATING_CREATING = 304
+    # Running server: its network disk is being extended (the VM keeps working).
+    DISK_EXTENDING = 350
+    # A stopped server with an ordered disk size is starting: the volume grows
+    # and the usage act is not created yet.
+    DISK_EXTENDING_ON_START = 360
     CLONING = 400
     QUEUED = 500
     AWAITING_PASSWORD = 600
     MAINTENANCE = 700
+    CLEANUP_IN_PROGRESS = 800
+    REINSTALLING = 900
+    # On the way to cold storage; NOT yet in storage (``cold_storage`` is still None).
+    COLD_MOVING = 950
+    COLD_STORAGE = 1000
+    # Cold storage with zero balance: the volume is deleted at ``cold_grace_deadline``.
+    COLD_GRACE = 1100
 
 
 class PricePlan(IntEnum):
@@ -72,3 +87,104 @@ class OSType:
 
     WINDOWS = "win"
     LINUX = "lin"
+
+
+class TermState:
+    """Rental-term state codes returned in ``CloudServer.term_state``.
+
+    Computed on the server from the ``term_*`` snapshot fields; branch on the
+    code, do not re-derive the state from the dates client-side.
+    """
+
+    NOT_TERM_PLAN = "not_term_plan"
+    """Hourly or postpaid plan: there is no commitment at all."""
+    ACTIVE = "active"
+    """The term is running and the snapshot applies to the current plan."""
+    PENDING_CONSENT = "pending_consent"
+    """Conditions accepted, snapshot written, dates not set yet: the first usage act starts the term."""
+    GRANDFATHERED = "grandfathered"
+    """Legacy configuration without dates and without consent; dates are filled on start.
+
+    Not a free pass: a draft that carries the earlier-terms mark but has no
+    signature still gets 409 ``LEGACY_TERMS_CONSENT_REQUIRED`` on start."""
+    LEGACY_EXPIRED = "legacy_expired"
+    """Legacy term expired without consent: re-armed on start for the same length with its own discount."""
+    CONFIRMED_EXPIRED = "confirmed_expired"
+    """A confirmed term ended: no discount until a new consent is given."""
+    NO_SNAPSHOT = "no_snapshot"
+    """A term plan without an applicable snapshot. The main value for an unsigned
+    draft and for a server after a plan change: a new term needs the customer's
+    consent (``CloudServer.requires_term_consent``)."""
+
+
+class ServerCreateRejectReason:
+    """Machine-readable labels in ``reason`` of ``POST cloud-servers/`` refusals.
+
+    Read them through :attr:`intelion_cloud.exceptions.APIError.reason`. Values
+    mirror ``user_panel.consts.ServerCreateRejectReason`` on the server
+    (MIAN-412); the key is additive next to ``detail``.
+    """
+
+    VALIDATION = "validation"
+    """The request did not pass serializer validation (400)."""
+    CPU_LIMIT = "cpu_limit"
+    """The account's limit of GPU-less servers is exhausted (400)."""
+    QUEUE_DISABLED = "queue_disabled"
+    """Queueing for this GPU is forbidden; ``suggested_alternative`` is offered (409)."""
+    INTERNAL_ERROR = "internal_error"
+    """The server logged an internal error while creating the configuration (500)."""
+
+
+class TermConflictCode:
+    """Machine-readable ``error_code`` of 409 refusals caused by the rental term.
+
+    Read them through :attr:`intelion_cloud.exceptions.APIError.error_code`.
+    Values mirror the constants in ``user_panel.services.term_obligation`` on
+    the server. The body is ``{"error_code", "message", "detail"}``; the
+    Russian ``message`` changes with copywriting, branch on the code
+    (``TERM_TERMINATION_REQUIRED`` has ``terminate_url`` instead of ``detail``).
+
+    Only codes an API-token caller can get from API v2 are listed. The
+    document-signing endpoints of the web panel answer with more codes
+    (``TERM_TEXT_MISMATCH``, ``TERM_CONSENT_NOT_APPLICABLE``,
+    ``SIGNED_BY_STAFF_FORBIDDEN`` and others): the SDK has no wrappers for
+    them. Compare ``error_code`` with a string when you need a code that is
+    not listed here.
+    """
+
+    AUTO_RENEWAL_CONSENT_REQUIRED = "AUTO_RENEWAL_CONSENT_REQUIRED"
+    """``update(is_auto_renewal=True)`` under a running confirmed term
+    (``CloudServer.is_renewal_mandatory``), whatever the reason (also a plan no
+    longer on sale: the token caller gets this code first). Turning auto-renewal on extends the
+    term: only the customer can do it, with the switch on the server card in the
+    web panel, never via API v2 (no consent window since 2026-09-29)."""
+    AUTO_RENEWAL_NOT_APPLICABLE = "AUTO_RENEWAL_NOT_APPLICABLE"
+    """``update(is_auto_renewal=True)`` while the toggle is fixed by a document:
+    conditions accepted but the server not started yet
+    (``term_state == "pending_consent"``), or a confirmed term that already
+    ended and was neither stopped nor renewed."""
+    TERM_RENEWAL_IN_PROGRESS = "TERM_RENEWAL_IN_PROGRESS"
+    """``start()`` or ``reinstall_os()`` hit the short window while the term is
+    being renewed. Retry later."""
+    TERM_CONDITIONS_REQUIRED = "TERM_CONDITIONS_REQUIRED"
+    """``start()``, ``reinstall_os()`` or ``migrate()``
+    would open a rental term (``CloudServer.requires_term_consent``) or change a
+    signed one, and the conditions were not accepted for this exact flavor and
+    term. Only the customer can accept them, in the web panel. Nothing is changed."""
+    LEGAL_TYPE_REQUIRED = "LEGAL_TYPE_REQUIRED"
+    """The same entry points: a term plan needs the customer type (individual,
+    sole proprietor or company) filled in the profile first."""
+    LEGACY_TERMS_CONSENT_REQUIRED = "LEGACY_TERMS_CONSENT_REQUIRED"
+    """The server was set up by support on the earlier terms and has not been
+    started yet: the start (and ``migrate()``) waits for the customer to accept
+    the terms in the launch window of the web panel."""
+    AFFORDABLE_LAUNCH_UNDER_TERM = "AFFORDABLE_LAUNCH_UNDER_TERM"
+    """``start(run_on_affordable_time=True)`` on a rental term: the term is
+    signed for the full billing period, so a start for the affordable time is
+    refused. Top up the balance by the payment amount instead."""
+    TERM_TERMINATION_REQUIRED = "TERM_TERMINATION_REQUIRED"
+    """``delete()`` (and a change of the configuration that would leave the term)
+    under a running confirmed term (``CloudServer.is_renewal_mandatory``): the
+    way out is the rental termination with recalculation in the web panel; the
+    body carries ``terminate_url``. ``stop()`` is not refused: it only powers
+    the VM off and the payments go on."""

@@ -35,6 +35,40 @@ class APIError(IntelionCloudError):
         self.response_body = response_body
         super().__init__(message)
 
+    @property
+    def reason(self) -> Optional[str]:
+        """Machine-readable rejection label, when the server sent one.
+
+        ``POST cloud-servers/`` puts ``reason`` next to ``detail`` in its 400
+        and 409 bodies (``ServerCreateRejectReason`` values: ``validation``,
+        ``cpu_limit``, ``queue_disabled``, ``internal_error``). Branch on this,
+        not on the Russian ``detail`` text, which changes with copywriting.
+        ``None`` for bodies without the key (DRF validation errors included).
+        """
+        if isinstance(self.response_body, dict):
+            value = self.response_body.get("reason")
+            if isinstance(value, str) and value:
+                return value
+        return None
+
+    @property
+    def error_code(self) -> Optional[str]:
+        """Machine-readable ``error_code`` of term and disk refusals, when present.
+
+        The term guards on the server answer with
+        ``{"error_code", "message", "detail"}`` (see
+        :class:`~intelion_cloud.constants.TermConflictCode`). Branch on this,
+        not on the Russian message. The disk order of ``migrate(ssd_count=)``
+        reports its codes here too (``change_one_at_a_time``, ``not_draft``,
+        ``disk_operation_pending``, ``feature_disabled``). ``None`` for bodies
+        without the key.
+        """
+        if isinstance(self.response_body, dict):
+            value = self.response_body.get("error_code")
+            if isinstance(value, str) and value:
+                return value
+        return None
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(status_code={self.status_code}, message={str(self)!r})"
 
@@ -65,7 +99,20 @@ class NotFoundError(APIError):
 
 
 class ConflictError(APIError):
-    """409 Conflict — server is busy with another operation."""
+    """409 Conflict: the request clashes with the server's current state.
+
+    Several unrelated causes share this status, tell them apart by the body:
+
+    * the server is busy with another operation (plain ``detail``);
+    * queueing for a scarce GPU is forbidden: :attr:`reason` is
+      ``"queue_disabled"``, ``response_body`` carries ``suggested_alternative``;
+    * the rental term forbids the action: :attr:`error_code` is one of the
+      :class:`~intelion_cloud.constants.TermConflictCode` values (or another
+      term code), ``str(exc)`` is the server's ``message`` for the user.
+      ``update(is_auto_renewal=True)`` under a running confirmed term gives
+      ``AUTO_RENEWAL_CONSENT_REQUIRED``; a start during a term renewal gives
+      ``TERM_RENEWAL_IN_PROGRESS``.
+    """
 
 
 class RateLimitError(APIError):

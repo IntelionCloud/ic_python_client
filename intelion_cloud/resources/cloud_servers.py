@@ -58,18 +58,23 @@ class CloudServers(SyncResource):
         promocode_id: Optional[int] = None,
         is_in_queue: bool = False,
         addon_ids: Optional[List[int]] = None,
+        ssh_key_ids: Optional[List[int]] = None,
     ) -> CloudServer:
         """Create a new cloud server configuration.
 
         Args:
             name: Server display name.
             flavor_id: FlavorConfig primary key. CPU/RAM/GPU are fixed by the flavor.
-            ssd_count: Network disk size in GB (min 30). Maps to ``network_disk_count`` server-side.
+            ssd_count: Network disk size in GB: 128 to 2048, a multiple of 128. Maps to ``network_disk_count`` server-side.
             os_id: Operating system image ID (must be compatible with the flavor).
             price_plan: Billing plan (use :class:`~intelion_cloud.constants.PricePlan`).
             promocode_id: Promotional code ID to apply.
             is_in_queue: If True, queue the order when hardware is unavailable.
             addon_ids: Software addon IDs to install at first boot.
+            ssh_key_ids: IDs of your SSH keys (see ``ssh_keys.list()``) to inject
+                in addition to the password. Pass only IDs of your own existing
+                keys: a foreign or deleted ID currently makes the server answer
+                500 and leaves an orphan draft.
         """
         payload: Dict[str, Any] = {
             "name": name,
@@ -84,6 +89,8 @@ class CloudServers(SyncResource):
             payload["is_in_queue"] = True
         if addon_ids:
             payload["addon_ids"] = list(addon_ids)
+        if ssh_key_ids:
+            payload["ssh_key_ids"] = list(ssh_key_ids)
 
         data = self._post(_PATH, json=payload)
         return CloudServer.from_dict(data)
@@ -95,7 +102,29 @@ class CloudServers(SyncResource):
         name: Optional[str] = None,
         is_auto_renewal: Optional[bool] = None,
     ) -> CloudServer:
-        """Update server properties (name, auto-renewal)."""
+        """Update server properties (name, auto-renewal).
+
+        ``is_auto_renewal`` under a rental term (see ``CloudServer.term_state``):
+
+        * ``False`` is always accepted: the client may refuse the renewal at
+          any time.
+        * ``True`` under a running confirmed term
+          (``CloudServer.is_renewal_mandatory``) raises
+          :class:`~intelion_cloud.exceptions.ConflictError` with
+          ``error_code == "AUTO_RENEWAL_CONSENT_REQUIRED"``. Turning it on
+          extends the term: only the customer can do it, with the switch on
+          the server card in the web panel, not through API v2.
+        * ``True`` after the conditions were accepted but before the first
+          start (``term_state == "pending_consent"``), or on a confirmed term
+          that ended and was neither stopped nor renewed, raises
+          :class:`~intelion_cloud.exceptions.ConflictError` with
+          ``error_code == "AUTO_RENEWAL_NOT_APPLICABLE"``.
+        * Off a term (hourly, postpaid, legacy) nothing changed.
+
+        Codes: :class:`~intelion_cloud.constants.TermConflictCode`; read them
+        through :attr:`~intelion_cloud.exceptions.APIError.error_code`;
+        ``str(exc)`` is the server's message for the user.
+        """
         payload: Dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -113,7 +142,20 @@ class CloudServers(SyncResource):
         is_auto_renewal: Optional[bool] = None,
         run_on_affordable_time: bool = False,
     ) -> CloudServer:
-        """Start a stopped server."""
+        """Start a stopped server.
+
+        ``is_auto_renewal`` is written only off a rental term. When the
+        server is bound by a term (``CloudServer.is_bound_by_term``: the term
+        is running, or the conditions were accepted and this start opens it)
+        the argument is ignored and the toggle stays as in the signed consent
+        document; the call still succeeds. Change it with :meth:`update`.
+
+        Raises :class:`~intelion_cloud.exceptions.ConflictError` with
+        ``error_code == "TERM_RENEWAL_IN_PROGRESS"`` if the start hits the
+        short window while the term is being renewed. Other term refusals (for example ``TERM_CONDITIONS_REQUIRED``)
+        come the same way, see
+        :attr:`~intelion_cloud.exceptions.APIError.error_code`.
+        """
         payload = _build_action_payload(
             2,  # ServerStatus.ACTIVE
             is_auto_renewal=is_auto_renewal,
@@ -123,7 +165,13 @@ class CloudServers(SyncResource):
         return CloudServer.from_dict(data)
 
     def stop(self, server_id: int) -> CloudServer:
-        """Stop (shelve) a running server."""
+        """Stop a running server.
+
+        Off a rental term the server is shelved. Under a term
+        (``CloudServer.is_bound_by_term``) the virtual machine is only powered
+        off: the usage act stays open and charges keep running until the end
+        of the term. To stop paying, terminate the term in the web panel.
+        """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
         return CloudServer.from_dict(data)
 
@@ -133,17 +181,32 @@ class CloudServers(SyncResource):
         return CloudServer.from_dict(data)
 
     def delete(self, server_id: int) -> CloudServer:
-        """Delete a server (irreversible)."""
+        """Delete a server (irreversible).
+
+        Under a confirmed rental term the call is refused with
+        :class:`~intelion_cloud.exceptions.ConflictError`, ``error_code ==
+        "TERM_TERMINATION_REQUIRED"``: wait for the term to end with
+        auto-renewal off, or terminate it in the web panel.
+        """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
 
     def reinstall_os(self, server_id: int) -> CloudServer:
         """Reinstall the OS on a server, wiping the boot disk.
 
-        All data on the boot disk is destroyed. The current monthly billing
-        cycle is preserved (the open UsageAct is reused). A new IP and root
-        password are generated and become available in the user panel a few
-        minutes after the call returns.
+        All data on the boot disk is destroyed. While the server has an open
+        UsageAct whose period has not ended, that act is reused and the
+        billing cycle is preserved. Without one (the term is not signed, or
+        the term has ended and is not renewed yet) the call is a start: it
+        goes through the same term and funds checks as :meth:`start`. A new IP
+        and root password are generated and become available in the user
+        panel a few minutes after the call returns.
+
+        Raises :class:`~intelion_cloud.exceptions.ConflictError` with
+        ``error_code`` ``"TERM_CONDITIONS_REQUIRED"`` (sign the term
+        conditions in the web panel), ``"TERM_RENEWAL_IN_PROGRESS"`` or ``"LEGACY_TERMS_CONSENT_REQUIRED"``, and
+        :class:`~intelion_cloud.exceptions.ValidationError` (400) when the
+        balance does not cover a new period. Nothing is changed on refusal.
         """
         data = self._post(f"{_PATH}{server_id}/reinstall-os/")
         return CloudServer.from_dict(data)
@@ -175,15 +238,43 @@ class CloudServers(SyncResource):
         *,
         flavor_id: int,
         price_plan: int,
+        ssd_count: Optional[int] = None,
     ) -> CloudServer:
         """Migrate a server to a different FlavorConfig and/or price plan.
 
         The server must be stopped before migration. CPU/RAM/GPU are fixed by the flavor.
+
+        A target price plan with a rental term (1, 3, 6 or 12 months) needs the
+        term conditions accepted in the web panel for this exact flavor and term
+        before the call. Otherwise the call fails with ``ConflictError`` (409),
+        ``error_code`` ``TERM_CONDITIONS_REQUIRED``, and nothing is changed. This
+        applies to a running server and to a server that has not been started
+        yet (including one with conditions accepted for another flavor or
+        term). The term rules are in force from the date the new offer edition
+        takes effect on the server (clients are notified in advance); until then term plans run on
+        the earlier terms.
+
+        ``ssd_count`` (network disk size in GB, 128 to 2048, a multiple of 128)
+        is optional. Disk and hardware/plan are changed by separate requests: to
+        order ONLY the disk of a stopped server with a volume, pass its CURRENT
+        ``flavor_id`` (the ``Flavor.id`` whose ``openstack_id`` equals
+        ``CloudServer.flavor_oid``) and ``price_plan``, otherwise the server answers 400
+        ``change_one_at_a_time``. On a draft without a volume the size is
+        written at once; on a stopped server with a volume it is an order for
+        the next start (``CloudServer.disk_extend_order``). Refusals (read the
+        code through :attr:`~intelion_cloud.exceptions.APIError.error_code`):
+        404 ``feature_disabled`` (:class:`~intelion_cloud.exceptions.NotFoundError`)
+        while ordering the disk is switched off on the server; 409 ``not_draft``
+        for a running server (its disk grows with extend-disk in the web panel);
+        409 ``disk_operation_pending`` while another disk operation is open;
+        409 ``TERM_TERMINATION_REQUIRED`` under a confirmed term.
         """
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,
             "price_plan": price_plan,
         }
+        if ssd_count is not None:
+            payload["ssd_count"] = ssd_count
         data = self._post(f"{_PATH}{server_id}/migrate/", json=payload)
         return CloudServer.from_dict(data)
 
@@ -215,6 +306,7 @@ class AsyncCloudServers(AsyncResource):
         promocode_id: Optional[int] = None,
         is_in_queue: bool = False,
         addon_ids: Optional[List[int]] = None,
+        ssh_key_ids: Optional[List[int]] = None,
     ) -> CloudServer:
         payload: Dict[str, Any] = {
             "name": name,
@@ -229,6 +321,8 @@ class AsyncCloudServers(AsyncResource):
             payload["is_in_queue"] = True
         if addon_ids:
             payload["addon_ids"] = list(addon_ids)
+        if ssh_key_ids:
+            payload["ssh_key_ids"] = list(ssh_key_ids)
 
         data = await self._post(_PATH, json=payload)
         return CloudServer.from_dict(data)
@@ -240,6 +334,7 @@ class AsyncCloudServers(AsyncResource):
         name: Optional[str] = None,
         is_auto_renewal: Optional[bool] = None,
     ) -> CloudServer:
+        """Async :meth:`CloudServers.update`; same 409 rules for ``is_auto_renewal``."""
         payload: Dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -255,6 +350,7 @@ class AsyncCloudServers(AsyncResource):
         is_auto_renewal: Optional[bool] = None,
         run_on_affordable_time: bool = False,
     ) -> CloudServer:
+        """Async :meth:`CloudServers.start`; ``is_auto_renewal`` is ignored under a term."""
         payload = _build_action_payload(
             2,
             is_auto_renewal=is_auto_renewal,
@@ -264,6 +360,7 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def stop(self, server_id: int) -> CloudServer:
+        """Async :meth:`CloudServers.stop`; under a term the VM is only powered off."""
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
         return CloudServer.from_dict(data)
 
@@ -272,11 +369,12 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def delete(self, server_id: int) -> CloudServer:
+        """Async :meth:`CloudServers.delete`; under a term: 409 ``TERM_TERMINATION_REQUIRED``."""
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
 
     async def reinstall_os(self, server_id: int) -> CloudServer:
-        """Reinstall the OS on a server, wiping the boot disk."""
+        """Async :meth:`CloudServers.reinstall_os`; without an open period it can be refused by the term checks."""
         data = await self._post(f"{_PATH}{server_id}/reinstall-os/")
         return CloudServer.from_dict(data)
 
@@ -300,10 +398,13 @@ class AsyncCloudServers(AsyncResource):
         *,
         flavor_id: int,
         price_plan: int,
+        ssd_count: Optional[int] = None,
     ) -> CloudServer:
         payload: Dict[str, Any] = {
             "flavor_id": flavor_id,
             "price_plan": price_plan,
         }
+        if ssd_count is not None:
+            payload["ssd_count"] = ssd_count
         data = await self._post(f"{_PATH}{server_id}/migrate/", json=payload)
         return CloudServer.from_dict(data)

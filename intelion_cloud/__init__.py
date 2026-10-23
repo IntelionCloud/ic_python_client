@@ -9,7 +9,14 @@ Usage::
 """
 
 from ._client import AsyncIntelionCloud, IntelionCloud
-from .constants import BillingPeriod, PricePlan, ServerState
+from .constants import (
+    BillingPeriod,
+    PricePlan,
+    ServerCreateRejectReason,
+    ServerState,
+    TermConflictCode,
+    TermState,
+)
 from .constants import ServerStatus as ServerStatusEnum
 from .exceptions import (
     APIError,
@@ -34,7 +41,11 @@ from .models import (
     SSHKey,
     SoftwareAddon,
     CloudServer,
+    ColdFreeWindow,
+    ColdStorage,
+    ColdStorageSummary,
     DebtInfo,
+    DiskExtendOrder,
     Flavor,
     FlavorSubstitution,
     InferenceApiAccessStatus,
@@ -54,7 +65,7 @@ from .models import (
     WhiteIP,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     # Clients
@@ -62,6 +73,10 @@ __all__ = [
     "AsyncIntelionCloud",
     # Models
     "CloudServer",
+    "ColdFreeWindow",
+    "ColdStorage",
+    "ColdStorageSummary",
+    "DiskExtendOrder",
     "ServerStatus",
     "Flavor",
     "FlavorSubstitution",
@@ -93,6 +108,9 @@ __all__ = [
     "ServerState",
     "PricePlan",
     "BillingPeriod",
+    "TermState",
+    "ServerCreateRejectReason",
+    "TermConflictCode",
     # Exceptions
     "IntelionCloudError",
     "APIError",

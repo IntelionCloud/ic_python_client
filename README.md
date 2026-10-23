@@ -35,7 +35,7 @@ client.cloud_servers.stop(server_id=42)
 new_server = client.cloud_servers.create(
     name="my-h100-box",
     flavor_id=1,          # FlavorConfig PK
-    ssd_count=100,        # network disk size, GB (min 30)
+    ssd_count=128,        # network disk size, GB (128 to 2048, step 128)
     os_id=1,              # OperationalSystemImage PK
     price_plan=0,         # 0 = hourly, 1 = monthly, ...
 )
@@ -100,6 +100,71 @@ print(usage.total_rub_cents)  # reconciles with «История операци�
 rotated = client.inference_api_keys.rotate(key.key_hash, grace_period_hours=24)
 print(rotated.new_key.api_key)
 ```
+
+## Usage act costs
+
+Every usage act (`server.usage_act`, `last_usage_act`, `last_finished_usage_act`,
+`resume_usage_act`) carries server-computed costs in kopecks: `next_charge_rub_cents`
+(the next debit), `full_period_cost_rub_cents` (current period incl. prepay) and
+`full_planned_cost_rub_cents` (stand-alone price of the planned period, the number
+to show in a "confirm start" dialog), plus the act's own `discount_percent` and the
+applied `promocode_code` / `promocode_discount_value`. Do not recompute them
+client-side.
+
+## Cold storage
+
+A stopped server keeps its boot volume for free for a while (`cold_free` says
+until when and at what price after), then the compute is released and the
+volume is billed as cold storage (`cold_storage`). Both blocks are `None` on a
+running server; `resume_usage_act` is the server-side price of resuming a cold
+server.
+
+```python
+from intelion_cloud import ServerState
+
+server = client.cloud_servers.get(42)
+if server.server_state in (ServerState.COLD_STORAGE, ServerState.COLD_GRACE):
+    print(f"{server.cold_storage.storage_gb} GB, debt {server.cold_storage.accrued_debt_rub_cents} kopecks")
+    print(f"resume costs {server.resume_usage_act.next_payment.amount_rub_cents} kopecks")
+elif server.cold_free:
+    print(f"free storage until {server.cold_free.free_until_dt}")
+```
+
+## Rental term
+
+A monthly plan is a term too: a server on `price_plan` 1, 3, 6 or 12 months
+needs the term conditions signed in the web panel when
+`server.requires_term_consent` is true, otherwise `start` (and `reinstall_os`
+without an open period) is refused with 409 `TERM_CONDITIONS_REQUIRED`. Servers
+rented before the reform without a signature still start and report
+`requires_term_consent == False`. Under a running term `stop` only powers the VM
+off (the term stays open and charges continue) and `delete` is refused with 409
+`TERM_TERMINATION_REQUIRED`. Servers on a term plan carry a read-only
+snapshot of the commitment: `term_months`, `term_discount_percent`,
+`term_started_at`, `term_ends_at` (already shifted by any downtime on our side),
+`term_state` and the flags the server derives from them.
+
+```python
+from intelion_cloud import ConflictError, TermConflictCode, TermState
+
+server = client.cloud_servers.get(42)
+if server.term_state == TermState.ACTIVE:
+    print(f"{server.term_months} months at -{server.term_discount_percent}% until {server.term_ends_at}")
+
+# Turning auto-renewal off is always allowed. Turning it on under a running
+# confirmed term extends the term: only the customer in the web panel.
+try:
+    client.cloud_servers.update(42, is_auto_renewal=True)
+except ConflictError as e:
+    if e.error_code == TermConflictCode.AUTO_RENEWAL_CONSENT_REQUIRED:
+        print(e)  # the server's message for the user
+```
+
+Under a term `start(is_auto_renewal=...)` ignores the argument: the toggle stays
+as in the signed consent. Consent, renewal and early termination are
+personal-account actions and are not part of API v2; the SDK only reads their
+state. A company or sole proprietor cannot clear `company_name` through
+`users.update` (400): the name decides the client kind of the term.
 
 ## Authentication
 

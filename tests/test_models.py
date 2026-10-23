@@ -172,6 +172,12 @@ class TestCloudServer:
         assert addon.has_error is False
         # Card background
         assert server.card_background == "https://cdn.intelion.cloud/bg/42.png"
+        # Rental term: hourly server, no commitment
+        assert server.term_months == 0
+        assert server.term_state == "not_term_plan"
+        assert server.has_term_snapshot is False
+        assert server.is_bound_by_term is False
+        assert server.billing_cycle_months == 1
 
     def test_from_dict_minimal(self):
         data = {
@@ -191,6 +197,13 @@ class TestCloudServer:
         assert server.software_addons == []
         assert server.card_background is None
         assert server.usage_act is None
+        # Pre-reform server: term fields absent -> neutral defaults, no crash
+        assert server.term_months == 0
+        assert server.term_discount_percent == 0
+        assert server.term_started_at is None
+        assert server.term_ends_at is None
+        assert server.term_state == ""
+        assert server.billing_cycle_months == 0
 
 
 class TestServerStatus:

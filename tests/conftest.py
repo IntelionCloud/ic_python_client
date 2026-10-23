@@ -136,6 +136,37 @@ SAMPLE_USAGE_ACT = {
         "amount_rub_cents": 16071,
         "period_end_dt": "2025-01-01T01:00:00Z",
     },
+    "next_charge_rub_cents": 16071,
+    "full_period_cost_rub_cents": 16071,
+    "full_planned_cost_rub_cents": 16071,
+    "discount_percent": 0,
+    "promocode_code": None,
+    "promocode_discount_value": None,
+}
+
+# A monthly act on a 12-month plan for a company: one month frozen at a time,
+# 35% term discount snapshot, a 10% percentage promocode on top.
+SAMPLE_TERM_USAGE_ACT = {
+    **SAMPLE_USAGE_ACT,
+    "id": 101,
+    "period": 30,
+    "periods_planned": 1,
+    "monthly_price_rub": "63180.00",
+    "cloud_srv_price_rub_cents": 6318000,
+    "actual_cost_rub_cents": 0,
+    "spent_amount_rub_cents": 0,
+    "next_payment": {
+        "period_price_rub_cents": 6318000,
+        "periods_to_pay": 1,
+        "amount_rub_cents": 6318000,
+        "period_end_dt": "2026-10-01T00:00:00+03:00",
+    },
+    "next_charge_rub_cents": 6318000,
+    "full_period_cost_rub_cents": 6318000,
+    "full_planned_cost_rub_cents": 6318000,
+    "discount_percent": 35,
+    "promocode_code": "WELCOME10",
+    "promocode_discount_value": 10,
 }
 
 SAMPLE_CLOUD_SERVER = {
@@ -176,6 +207,99 @@ SAMPLE_CLOUD_SERVER = {
     "total_network_disk_size": 1024,
     "total_local_disk_size": 0,
     "max_available": 5,
+    "migration_error": None,
+    # Cold storage (DSD-013): a running server, nothing planned.
+    "cold_storage_since": None,
+    "cold_storage_planned_at": None,
+    "days_idle": None,
+    "cold_grace_deadline": None,
+    "cold_storage": None,
+    "cold_free": None,
+    "resume_usage_act": None,
+    # Rental term (pricing-plans revision). An hourly server: no commitment.
+    "term_months": 0,
+    "term_discount_percent": 0,
+    "term_started_at": None,
+    "term_ends_at": None,
+    "term_conditions_accepted_at": None,
+    "has_term_snapshot": False,
+    "is_renewal_mandatory": False,
+    "requires_term_consent": False,
+    "term_renewal_accepted_at": None,
+    "term_outage_shift_hours": 0,
+    "term_outage_active": False,
+    "term_state": "not_term_plan",
+    "is_bound_by_term": False,
+    "term_renewal_available": False,
+    "term_renewal_pending": False,
+    "billing_cycle_months": 1,
+    "pays_term_monthly": False,
+}
+
+# The same server stopped 9 days ago, still inside the free storage window:
+# the API says when the free window ends and what the volume will cost after.
+SAMPLE_STOPPED_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "status": -1,
+    "server_state": 0,
+    "has_instance": True,
+    "usage_act": None,
+    "days_idle": 9,
+    "cold_storage_planned_at": "2026-09-20T12:00:00+03:00",
+    "cold_free": {
+        "free_until_dt": "2026-09-20T12:00:00+03:00",
+        "storage_gb": "50.000",
+        "hour_price_rub_cents": 7,
+        "month_price_rub_cents": 5000,
+    },
+}
+
+# The same server in cold storage with an open cold-storage act; resuming it
+# would open the usage act below (server-side price, never computed client-side).
+SAMPLE_COLD_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "status": -1,
+    "server_state": 1000,
+    "has_instance": False,
+    "usage_act": None,
+    "cold_storage_since": "2026-09-01T12:00:00+03:00",
+    "cold_storage_planned_at": None,
+    "days_idle": 30,
+    "cold_grace_deadline": None,
+    "cold_storage": {
+        "act_id": 777,
+        "started_at": "2026-09-01T12:00:00+03:00",
+        "storage_gb": "50.000",
+        "monthly_price_rub_cents": 5000,
+        "accrued_debt_rub_cents": 2333,
+        "billed_until_dt": "2026-09-15T12:00:00+03:00",
+    },
+    "cold_free": None,
+    "resume_usage_act": SAMPLE_USAGE_ACT,
+}
+
+# The same server on a confirmed 12-month term: what the API returns for a
+# company that pays monthly and has one settled outage on our side.
+SAMPLE_TERM_SERVER = {
+    **SAMPLE_CLOUD_SERVER,
+    "price_plan": 12,
+    "term_months": 12,
+    "term_discount_percent": 35,
+    "term_started_at": "2026-09-01T00:00:00+03:00",
+    "term_ends_at": "2027-09-01T05:00:00+03:00",
+    "term_conditions_accepted_at": "2026-08-31T18:30:00+03:00",
+    "has_term_snapshot": True,
+    "is_renewal_mandatory": True,
+    "requires_term_consent": False,
+    "term_renewal_accepted_at": None,
+    "term_outage_shift_hours": 5,
+    "term_outage_active": False,
+    "term_state": "active",
+    "is_bound_by_term": True,
+    "term_renewal_available": False,
+    "term_renewal_pending": False,
+    "billing_cycle_months": 1,
+    "pays_term_monthly": True,
 }
 
 SAMPLE_INFERENCE_API_KEY = {
@@ -215,4 +339,6 @@ SAMPLE_USER = {
     "default_payment_type": "ACQUIRING_TYPE",
     "tg_id": True,
     "is_email_verified": True,
+    # Term plans (offer clause 8.5): an individual pays the whole term upfront.
+    "is_term_business": False,
 }
