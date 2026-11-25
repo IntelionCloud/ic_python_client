@@ -3,6 +3,10 @@
 Notable changes of the `intelion-cloud` SDK. GitHub Releases add an
 auto-generated list of merged commits on top of this file.
 
+## 0.7.1 (unreleased)
+
+- Fix: `cloud_servers.start()` raised `KeyError: 'id'` when the server was queued (no free GPUs) or resumed from cold storage, because the server answers these accepted starts with a short body. `start()`, `stop()` and `reboot()` now re-read the server with `get()` when the answer has no `id` and return it (a queued server has `server_state == ServerState.QUEUED`). `delete()` out of cold storage returns an object with only `id` and `status` filled in.
+
 ## 0.7.0 (2026-10-23)
 
 Pairs with the pricing-plans revision on the server (rental terms), which is in

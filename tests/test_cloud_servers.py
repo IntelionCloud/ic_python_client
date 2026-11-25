@@ -4,7 +4,15 @@ import httpx
 import pytest
 import respx
 
-from intelion_cloud import ConflictError, IntelionCloud, ServerState, TermState, ValidationError
+from intelion_cloud import (
+    AsyncIntelionCloud,
+    ConflictError,
+    IntelionCloud,
+    NotFoundError,
+    ServerState,
+    TermState,
+    ValidationError,
+)
 from intelion_cloud._pagination import PaginatedResponse
 
 from .conftest import (
@@ -374,3 +382,128 @@ class TestCloudServersAdvanced:
         body = json.loads(respx_mock.calls[0].request.content)
         assert body == {"flavor_id": 5, "price_plan": 1}
         client.close()
+
+
+QUEUED_BODY = {
+    "message": "Все GPU этого типа сейчас заняты. Сервер поставлен в очередь.",
+    "queued": True,
+}
+COLD_RESUME_BODY = {"message": "Запускаем сервер с сохранённым диском."}
+QUEUED_SERVER = {**SAMPLE_CLOUD_SERVER, "server_state": 500}
+
+
+class TestShortActionResponses:
+    """PRT-455: ``actions/`` answers some accepted actions with a short body without ``id``."""
+
+    @pytest.mark.parametrize(
+        ("method", "short_body", "status_code"),
+        [
+            ("start", QUEUED_BODY, 202),
+            ("start", COLD_RESUME_BODY, 200),
+            ("stop", COLD_RESUME_BODY, 200),
+            ("reboot", COLD_RESUME_BODY, 200),
+        ],
+    )
+    @respx.mock(base_url=API_URL)
+    def test_short_body_is_refetched(self, respx_mock, method, short_body, status_code):
+        """PRT-455: short action body without id → server re-read via GET and returned."""
+        post = respx_mock.post("cloud-servers/42/actions/").respond(status_code, json=short_body)
+        get = respx_mock.get("cloud-servers/42/").respond(200, json=QUEUED_SERVER)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = getattr(client.cloud_servers, method)(42)
+        assert post.called and get.called
+        assert server.id == 42
+        assert server.server_state == ServerState.QUEUED
+        client.close()
+
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    @respx.mock(base_url=API_URL, assert_all_called=False)
+    def test_full_body_is_not_refetched(self, respx_mock, method):
+        """PRT-455: full server body → no extra GET."""
+        respx_mock.post("cloud-servers/42/actions/").respond(200, json=SAMPLE_CLOUD_SERVER)
+        get = respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_CLOUD_SERVER)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = getattr(client.cloud_servers, method)(42)
+        assert server.id == 42
+        assert get.called is False
+        client.close()
+
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    @respx.mock(base_url=API_URL)
+    def test_refetch_404_raises_not_found(self, respx_mock, method):
+        """PRT-455: GET after a short body answers 404 → NotFoundError, not KeyError."""
+        respx_mock.post("cloud-servers/42/actions/").respond(202, json=QUEUED_BODY)
+        respx_mock.get("cloud-servers/42/").respond(404, json={"detail": "Not found."})
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(NotFoundError):
+            getattr(client.cloud_servers, method)(42)
+        client.close()
+
+    @respx.mock(base_url=API_URL, assert_all_called=False)
+    def test_delete_from_cold_storage_short_body(self, respx_mock):
+        """PRT-455: delete out of cold storage answers only id and status → no crash, id and status kept."""
+        get = respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_CLOUD_SERVER)
+        respx_mock.post("cloud-servers/42/actions/").respond(200, json={"id": 42, "status": -3})
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = client.cloud_servers.delete(42)
+        assert server.id == 42
+        assert server.status == -3
+        assert get.called is False
+        client.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method", "short_body", "status_code"),
+        [
+            ("start", QUEUED_BODY, 202),
+            ("start", COLD_RESUME_BODY, 200),
+            ("stop", COLD_RESUME_BODY, 200),
+            ("reboot", COLD_RESUME_BODY, 200),
+        ],
+    )
+    async def test_async_short_body_is_refetched(self, method, short_body, status_code):
+        """PRT-455: async client, short action body → server re-read via GET and returned."""
+        async with respx.mock(base_url=API_URL) as respx_mock:
+            post = respx_mock.post("cloud-servers/42/actions/").respond(
+                status_code, json=short_body
+            )
+            get = respx_mock.get("cloud-servers/42/").respond(200, json=QUEUED_SERVER)
+            async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
+                server = await getattr(client.cloud_servers, method)(42)
+        assert post.called and get.called
+        assert server.server_state == ServerState.QUEUED
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    async def test_async_full_body_is_not_refetched(self, method):
+        """PRT-455: async client, full body → no extra GET."""
+        async with respx.mock(base_url=API_URL, assert_all_called=False) as respx_mock:
+            respx_mock.post("cloud-servers/42/actions/").respond(200, json=SAMPLE_CLOUD_SERVER)
+            get = respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_CLOUD_SERVER)
+            async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
+                server = await getattr(client.cloud_servers, method)(42)
+        assert server.id == 42
+        assert get.called is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    async def test_async_refetch_404_raises_not_found(self, method):
+        """PRT-455: async client, GET after a short body answers 404 → NotFoundError."""
+        async with respx.mock(base_url=API_URL) as respx_mock:
+            respx_mock.post("cloud-servers/42/actions/").respond(202, json=QUEUED_BODY)
+            respx_mock.get("cloud-servers/42/").respond(404, json={"detail": "Not found."})
+            async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
+                with pytest.raises(NotFoundError):
+                    await getattr(client.cloud_servers, method)(42)
+
+    @pytest.mark.asyncio
+    async def test_async_delete_from_cold_storage_short_body(self):
+        """PRT-455: async delete out of cold storage answers only id and status → no crash."""
+        async with respx.mock(base_url=API_URL) as respx_mock:
+            respx_mock.post("cloud-servers/42/actions/").respond(
+                200, json={"id": 42, "status": -3}
+            )
+            async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
+                server = await client.cloud_servers.delete(42)
+        assert server.id == 42
+        assert server.status == -3

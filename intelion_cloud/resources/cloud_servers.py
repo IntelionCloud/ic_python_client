@@ -25,6 +25,16 @@ def _build_action_payload(
     return payload
 
 
+def _needs_refetch(data: Any) -> bool:
+    """True when an ``actions/`` answer is not a full server body.
+
+    The server answers some accepted actions with a short body without ``id``
+    (queued start: ``{"message", "queued"}``; start from cold storage:
+    ``{"message"}``) or with no body at all.
+    """
+    return not isinstance(data, dict) or "id" not in data
+
+
 class CloudServers(SyncResource):
     """Synchronous cloud server operations."""
 
@@ -150,6 +160,15 @@ class CloudServers(SyncResource):
         the argument is ignored and the toggle stays as in the signed consent
         document; the call still succeeds. Change it with :meth:`update`.
 
+        Check ``server_state`` of the returned server after the call.
+        :attr:`~intelion_cloud.constants.ServerState.QUEUED` (500): no free
+        cards, the server is in the queue and will not start by itself; when a
+        card is freed you get a notification and ``server_state`` becomes 0,
+        then send the start again. From cold storage the start is accepted and
+        the disk is being restored; the status updates in a few minutes (poll
+        :meth:`get`). The server answers both cases with a short body, so the
+        SDK reads the server again with :meth:`get` and returns it.
+
         Raises :class:`~intelion_cloud.exceptions.ConflictError` with
         ``error_code == "TERM_RENEWAL_IN_PROGRESS"`` if the start hits the
         short window while the term is being renewed. Other term refusals (for example ``TERM_CONDITIONS_REQUIRED``)
@@ -162,6 +181,8 @@ class CloudServers(SyncResource):
             run_on_affordable_time=run_on_affordable_time,
         )
         data = self._post(f"{_PATH}{server_id}/actions/", json=payload)
+        if _needs_refetch(data):
+            return self.get(server_id)
         return CloudServer.from_dict(data)
 
     def stop(self, server_id: int) -> CloudServer:
@@ -173,11 +194,15 @@ class CloudServers(SyncResource):
         of the term. To stop paying, terminate the term in the web panel.
         """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
+        if _needs_refetch(data):
+            return self.get(server_id)
         return CloudServer.from_dict(data)
 
     def reboot(self, server_id: int) -> CloudServer:
         """Reboot a running server."""
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": "REBOOT"})
+        if _needs_refetch(data):
+            return self.get(server_id)
         return CloudServer.from_dict(data)
 
     def delete(self, server_id: int) -> CloudServer:
@@ -187,6 +212,10 @@ class CloudServers(SyncResource):
         :class:`~intelion_cloud.exceptions.ConflictError`, ``error_code ==
         "TERM_TERMINATION_REQUIRED"``: wait for the term to end with
         auto-renewal off, or terminate it in the web panel.
+
+        When a server is deleted out of cold storage the server answers only
+        ``id`` and ``status`` (-3): the other fields of the returned object
+        are empty.
         """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)
@@ -350,22 +379,32 @@ class AsyncCloudServers(AsyncResource):
         is_auto_renewal: Optional[bool] = None,
         run_on_affordable_time: bool = False,
     ) -> CloudServer:
-        """Async :meth:`CloudServers.start`; ``is_auto_renewal`` is ignored under a term."""
+        """Async :meth:`CloudServers.start`; ``is_auto_renewal`` is ignored under a term.
+
+        A queued start (``server_state == ServerState.QUEUED``) and a start from
+        cold storage are described there.
+        """
         payload = _build_action_payload(
             2,
             is_auto_renewal=is_auto_renewal,
             run_on_affordable_time=run_on_affordable_time,
         )
         data = await self._post(f"{_PATH}{server_id}/actions/", json=payload)
+        if _needs_refetch(data):
+            return await self.get(server_id)
         return CloudServer.from_dict(data)
 
     async def stop(self, server_id: int) -> CloudServer:
         """Async :meth:`CloudServers.stop`; under a term the VM is only powered off."""
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": -1})
+        if _needs_refetch(data):
+            return await self.get(server_id)
         return CloudServer.from_dict(data)
 
     async def reboot(self, server_id: int) -> CloudServer:
         data = await self._post(f"{_PATH}{server_id}/actions/", json={"status": "REBOOT"})
+        if _needs_refetch(data):
+            return await self.get(server_id)
         return CloudServer.from_dict(data)
 
     async def delete(self, server_id: int) -> CloudServer:

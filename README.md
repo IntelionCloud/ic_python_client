@@ -28,7 +28,9 @@ for server in client.cloud_servers.list():
     print(server.id, server.name, server.status)
 
 # Start / stop a server
-client.cloud_servers.start(server_id=42)
+server = client.cloud_servers.start(server_id=42)
+# server.server_state == 500 (ServerState.QUEUED): no free GPUs, the server is
+# queued and will not start by itself; start it again when a card is freed.
 client.cloud_servers.stop(server_id=42)
 
 # Create a new server
