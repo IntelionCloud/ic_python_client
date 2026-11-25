@@ -3,6 +3,11 @@
 Notable changes of the `intelion-cloud` SDK. GitHub Releases add an
 auto-generated list of merged commits on top of this file.
 
+## 0.7.1 (2026-11-25)
+
+- Fix: `cloud_servers.start()` raised `KeyError: 'id'` when the server was queued (no free GPUs) or started from cold storage, because the server answers these accepted starts with a short body. `start()`, `stop()` and `reboot()` now re-read the server with `get()` when the answer is not a full server body and return it. A queued server has `server_state == ServerState.QUEUED`. After a start from cold storage the returned server still shows `COLD_STORAGE` or `COLD_GRACE` while the restore runs in the background: poll `get()`, it moves to `STARTING` (or to `QUEUED` if no card is free); if the restore fails it stays stopped with `server_state == 0`. Do not call `start()` again while it shows cold storage.
+- Note: `delete()` out of cold storage returns an object with only `id` and `status` filled in; the other fields hold defaults (`server_state` 0, `price_plan` 0), do not rely on them.
+
 ## 0.7.0 (2026-10-23)
 
 Pairs with the pricing-plans revision on the server (rental terms), which is in
