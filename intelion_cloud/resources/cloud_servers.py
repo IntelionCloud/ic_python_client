@@ -28,11 +28,14 @@ def _build_action_payload(
 def _needs_refetch(data: Any) -> bool:
     """True when an ``actions/`` answer is not a full server body.
 
-    The server answers some accepted actions with a short body without ``id``
+    A full body carries both ``id`` and ``server_state``. Short bodies
     (queued start: ``{"message", "queued"}``; start from cold storage:
-    ``{"message"}``) or with no body at all.
+    ``{"message"}``; a light ``{"id", "status"}``) miss one of them, and
+    204 No Content has no body. Both keys are checked: without ``id``
+    ``CloudServer.from_dict`` raises ``KeyError``, without ``server_state``
+    the object would hold defaults instead of the real state.
     """
-    return not isinstance(data, dict) or "id" not in data
+    return not isinstance(data, dict) or "id" not in data or "server_state" not in data
 
 
 class CloudServers(SyncResource):
@@ -164,10 +167,18 @@ class CloudServers(SyncResource):
         :attr:`~intelion_cloud.constants.ServerState.QUEUED` (500): no free
         cards, the server is in the queue and will not start by itself; when a
         card is freed you get a notification and ``server_state`` becomes 0,
-        then send the start again. From cold storage the start is accepted and
-        the disk is being restored; the status updates in a few minutes (poll
-        :meth:`get`). The server answers both cases with a short body, so the
-        SDK reads the server again with :meth:`get` and returns it.
+        then send the start again. A start from cold storage is accepted, but
+        the returned server still shows ``ServerState.COLD_STORAGE`` or
+        ``ServerState.COLD_GRACE``: the restore runs in the background. Poll
+        :meth:`get`: the server moves to ``STARTING`` and then starts; if no
+        card is free, it ends in the queue (``ServerState.QUEUED``); if the
+        restore fails, the server stays stopped with ``server_state == 0``
+        (a brief 0 right before ``STARTING`` is normal).
+        While it still shows cold storage, do not call ``start()`` again.
+        The server answers these cases with a short body, so the SDK reads
+        the server again with :meth:`get` and returns it. If the call raises
+        after the start was accepted (that re-read failed), call :meth:`get`
+        before retrying.
 
         Raises :class:`~intelion_cloud.exceptions.ConflictError` with
         ``error_code == "TERM_RENEWAL_IN_PROGRESS"`` if the start hits the
@@ -215,7 +226,8 @@ class CloudServers(SyncResource):
 
         When a server is deleted out of cold storage the server answers only
         ``id`` and ``status`` (-3): the other fields of the returned object
-        are empty.
+        hold defaults (``server_state`` 0, ``price_plan`` 0); do not rely on
+        them.
         """
         data = self._post(f"{_PATH}{server_id}/actions/", json={"status": -3})
         return CloudServer.from_dict(data)

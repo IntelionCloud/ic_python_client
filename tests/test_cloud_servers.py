@@ -9,6 +9,7 @@ from intelion_cloud import (
     ConflictError,
     IntelionCloud,
     NotFoundError,
+    ServerError,
     ServerState,
     TermState,
     ValidationError,
@@ -389,31 +390,39 @@ QUEUED_BODY = {
     "queued": True,
 }
 COLD_RESUME_BODY = {"message": "Запускаем сервер с сохранённым диском."}
+LIGHT_BODY = {"id": 42, "status": -1}
+QUEUED_BODY_WITH_STATE = {**QUEUED_BODY, "server_state": 500}
 QUEUED_SERVER = {**SAMPLE_CLOUD_SERVER, "server_state": 500}
+COLD_SERVER = {**SAMPLE_CLOUD_SERVER, "server_state": 1000}
+SHELVING_SERVER = {**SAMPLE_CLOUD_SERVER, "server_state": 200}
+STARTING_SERVER = {**SAMPLE_CLOUD_SERVER, "server_state": 100}
 
 
 class TestShortActionResponses:
-    """PRT-455: ``actions/`` answers some accepted actions with a short body without ``id``."""
+    """PRT-455: ``actions/`` answers some accepted actions with a body that is not a full server."""
 
     @pytest.mark.parametrize(
-        ("method", "short_body", "status_code"),
+        ("method", "short_body", "status_code", "get_body", "state"),
         [
-            ("start", QUEUED_BODY, 202),
-            ("start", COLD_RESUME_BODY, 200),
-            ("stop", COLD_RESUME_BODY, 200),
-            ("reboot", COLD_RESUME_BODY, 200),
+            ("start", QUEUED_BODY, 202, QUEUED_SERVER, 500),
+            ("start", COLD_RESUME_BODY, 200, COLD_SERVER, 1000),
+            ("start", QUEUED_BODY_WITH_STATE, 202, QUEUED_SERVER, 500),
+            ("stop", LIGHT_BODY, 200, SHELVING_SERVER, 200),
+            ("reboot", LIGHT_BODY, 200, STARTING_SERVER, 100),
         ],
     )
     @respx.mock(base_url=API_URL)
-    def test_short_body_is_refetched(self, respx_mock, method, short_body, status_code):
-        """PRT-455: short action body without id → server re-read via GET and returned."""
+    def test_short_body_is_refetched(
+        self, respx_mock, method, short_body, status_code, get_body, state
+    ):
+        """PRT-455: short action body (no id or no server_state) → server re-read via GET and returned."""
         post = respx_mock.post("cloud-servers/42/actions/").respond(status_code, json=short_body)
-        get = respx_mock.get("cloud-servers/42/").respond(200, json=QUEUED_SERVER)
+        get = respx_mock.get("cloud-servers/42/").respond(200, json=get_body)
         client = IntelionCloud(token="tok", base_url=BASE_URL)
         server = getattr(client.cloud_servers, method)(42)
         assert post.called and get.called
         assert server.id == 42
-        assert server.server_state == ServerState.QUEUED
+        assert server.server_state == state
         client.close()
 
     @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
@@ -453,25 +462,28 @@ class TestShortActionResponses:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("method", "short_body", "status_code"),
+        ("method", "short_body", "status_code", "get_body", "state"),
         [
-            ("start", QUEUED_BODY, 202),
-            ("start", COLD_RESUME_BODY, 200),
-            ("stop", COLD_RESUME_BODY, 200),
-            ("reboot", COLD_RESUME_BODY, 200),
+            ("start", QUEUED_BODY, 202, QUEUED_SERVER, 500),
+            ("start", COLD_RESUME_BODY, 200, COLD_SERVER, 1000),
+            ("start", QUEUED_BODY_WITH_STATE, 202, QUEUED_SERVER, 500),
+            ("stop", LIGHT_BODY, 200, SHELVING_SERVER, 200),
+            ("reboot", LIGHT_BODY, 200, STARTING_SERVER, 100),
         ],
     )
-    async def test_async_short_body_is_refetched(self, method, short_body, status_code):
+    async def test_async_short_body_is_refetched(
+        self, method, short_body, status_code, get_body, state
+    ):
         """PRT-455: async client, short action body → server re-read via GET and returned."""
         async with respx.mock(base_url=API_URL) as respx_mock:
             post = respx_mock.post("cloud-servers/42/actions/").respond(
                 status_code, json=short_body
             )
-            get = respx_mock.get("cloud-servers/42/").respond(200, json=QUEUED_SERVER)
+            get = respx_mock.get("cloud-servers/42/").respond(200, json=get_body)
             async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
                 server = await getattr(client.cloud_servers, method)(42)
         assert post.called and get.called
-        assert server.server_state == ServerState.QUEUED
+        assert server.server_state == state
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
@@ -507,3 +519,37 @@ class TestShortActionResponses:
                 server = await client.cloud_servers.delete(42)
         assert server.id == 42
         assert server.status == -3
+
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    @respx.mock(base_url=API_URL)
+    def test_204_is_refetched(self, respx_mock, method):
+        """PRT-455: 204 No Content on an action → server re-read via GET."""
+        respx_mock.post("cloud-servers/42/actions/").respond(204)
+        get = respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_CLOUD_SERVER)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        server = getattr(client.cloud_servers, method)(42)
+        assert get.called
+        assert server.id == 42
+        client.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["start", "stop", "reboot"])
+    async def test_async_204_is_refetched(self, method):
+        """PRT-455: async client, 204 No Content on an action → server re-read via GET."""
+        async with respx.mock(base_url=API_URL) as respx_mock:
+            respx_mock.post("cloud-servers/42/actions/").respond(204)
+            get = respx_mock.get("cloud-servers/42/").respond(200, json=SAMPLE_CLOUD_SERVER)
+            async with AsyncIntelionCloud(token="tok", base_url=BASE_URL) as client:
+                server = await getattr(client.cloud_servers, method)(42)
+        assert get.called
+        assert server.id == 42
+
+    @respx.mock(base_url=API_URL)
+    def test_refetch_500_raises_server_error(self, respx_mock):
+        """PRT-455: GET after an accepted start answers 500 → ServerError, caller must get() before retry."""
+        respx_mock.post("cloud-servers/42/actions/").respond(202, json=QUEUED_BODY)
+        respx_mock.get("cloud-servers/42/").respond(500, json={"detail": "boom"})
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        with pytest.raises(ServerError):
+            client.cloud_servers.start(42)
+        client.close()

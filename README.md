@@ -31,6 +31,10 @@ for server in client.cloud_servers.list():
 server = client.cloud_servers.start(server_id=42)
 # server.server_state == 500 (ServerState.QUEUED): no free GPUs, the server is
 # queued and will not start by itself; start it again when a card is freed.
+# After a start from cold storage the server still shows COLD_STORAGE (1000) or
+# COLD_GRACE (1100): poll get(), it moves to STARTING and then starts, or to
+# QUEUED (500) if no card is free; if the restore fails it stays stopped
+# (server_state == 0). Do not call start() again while it shows cold storage.
 client.cloud_servers.stop(server_id=42)
 
 # Create a new server
