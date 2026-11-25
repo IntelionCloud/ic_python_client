@@ -296,10 +296,12 @@ respx_mock.get("cloud-servers/", params={"page": "2"}).respond(200, json={...})
 >
 > Пример (2026-07): клиент v0.4.0 (`queue_disabled`, `suggested_alternative`) готов и оттестирован, но его поля приходят из `client_board` PR #526, который на тот момент открыт → релиз отложен, код лежит в ветке `feature/queue-disabled-fields`.
 
-> [!warning] Права на репозиторий: релиз не у всех
-> У аккаунта `JamesonDeagle` push-доступ к `client_board` есть, но к `IntelionCloud/ic_python_client` — **только чтение** (`gh api repos/IntelionCloud/ic_python_client --jq .permissions` → `push:false`). Ни ветку, ни тег запушить нельзя (403). Если работаешь под этим аккаунтом, готовь передачу тому, у кого есть write:
-> - **Код** (новые коммиты) → `git bundle create out.bundle origin/main..<ветка>` + инструкция (получатель: `git fetch out.bundle <ветка>:<ветка>` → push → PR). Запасной способ — `git format-patch` + `git am`.
-> - **Релиз уже влитого кода** → человек с доступом ставит тег `vX.Y.Z` на `main` (через GitHub UI: Releases → Draft, или `git push origin vX.Y.Z`). Код передавать не нужно, если он уже в `main`.
+> [!warning] Права на репозиторий: проверить перед пушем
+> С 25.11.2026 у аккаунта `JamesonDeagle` есть push в `IntelionCloud/ic_python_client` (раньше было только чтение, 0.7.1 выпущена с этого аккаунта). Права могут меняться: перед пушем проверить `gh api repos/IntelionCloud/ic_python_client --jq .permissions`. Если `push:false`, готовь передачу тому, у кого есть write:
+> - **Код** (новые коммиты): `git bundle create out.bundle origin/main..<ветка>` и инструкция (получатель: `git fetch out.bundle <ветка>:<ветка>`, push, PR). Запасной способ: `git format-patch` и `git am`.
+> - **Релиз уже влитого кода**: человек с доступом ставит тег `vX.Y.Z` на `main` (GitHub UI: Releases, Draft, или `git push origin vX.Y.Z`). Код передавать не нужно, если он уже в `main`.
+>
+> `test.yml` идёт на self-hosted раннере и может висеть в очереди: перед тегом гонять тесты самим на крайних версиях Python (`docker run python:3.9-slim` и `python:3.13-slim`, `pip install -e . pytest respx pytest-asyncio`, `pytest tests/ -q`).
 
 **По SemVer:**
 - `MAJOR` (0.x → 1.0, 1.x → 2.0) — ломающие изменения публичного API клиента. Любое изменение сигнатуры публичного метода, переименование/удаление поля модели, изменение endpoint/payload — это breaking для потребителя SDK.
