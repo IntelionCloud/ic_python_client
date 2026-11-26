@@ -590,11 +590,11 @@ class ServerStatus:
     """The rental term must be signed in the web panel before the start (PRT-474).
 
     The same flag as ``CloudServer.requires_term_consent``. While it is ``True`` the start
-    answers 409 ``TERM_CONDITIONS_REQUIRED``, even when ``can_start`` is ``True``. It is computed
-    even when ``can_start`` is false. ``None`` on an older server. The flag does not list every
-    refusal: without a chosen client type the start answers 409 ``LEGAL_TYPE_REQUIRED``, and
-    ``False`` does not rule out 409 ``LEGACY_TERMS_CONSENT_REQUIRED`` or
-    ``TERM_RENEWAL_IN_PROGRESS``.
+    answers 409 ``TERM_CONDITIONS_REQUIRED``, or 409 ``LEGAL_TYPE_REQUIRED`` while the customer
+    has not chosen a client type in the profile, even when ``can_start`` is ``True``. It is
+    computed even when ``can_start`` is false. ``None`` on an older server. ``False`` does not
+    rule out other refusals: 409 ``LEGACY_TERMS_CONSENT_REQUIRED``, 409
+    ``TERM_RENEWAL_IN_PROGRESS``, maintenance.
     """
     launch_shortfall_rub_cents: Optional[int] = None
     """Kopecks the start lacks (PRT-474): ``0`` means the money is enough.
@@ -603,11 +603,13 @@ class ServerStatus:
     the customer to top up" without rebuilding it. Do not derive it from
     ``launch_required_rub_cents`` minus ``launch_funds_rub_cents``: when the requirement is ``0``
     (an open act already holds the money) there is no shortfall at any funds, even negative ones.
-    Two entries start with a shortfall above ``0``: a start with ``run_on_affordable_time`` and
-    the resume of an hourly server from cold storage. ``None`` when ``can_start`` is false
+    Two entries start with a shortfall above ``0``: a start with ``run_on_affordable_time`` of a
+    server that has run before and is not under a term (``affordable_runtime_seconds > 0``, no
+    disk-size order; a first start is not exempted by the flag), and the resume of an hourly
+    server from cold storage. ``None`` when ``can_start`` is false
     (``0`` would read as "the money is enough") or on an older server.
-    ``is_enough_money_for_full_period`` follows the term rules too, but differs from the gate: it
-    does not subtract the reservation of the client's other launches in flight.
+    ``is_enough_money_for_full_period`` follows the term rules too, but may differ from the gate:
+    for example it does not subtract the reservation of the client's other launches in flight.
     """
     upcoming_term_payment: Optional[UpcomingTermPayment] = None
     """Another server's term payment this start would leave unpaid; ``None`` when there is none."""

@@ -179,8 +179,10 @@ elif status.can_start:
     client.cloud_servers.start(42)
 ```
 
-The check is advisory: a start can still be refused (`LEGAL_TYPE_REQUIRED`,
-`TERM_RENEWAL_IN_PROGRESS`, maintenance), so keep handling `ConflictError`.
+The check is advisory: a start can still be refused (`LEGACY_TERMS_CONSENT_REQUIRED`,
+`TERM_RENEWAL_IN_PROGRESS`, maintenance), so keep handling `ConflictError`. A refusal for
+money comes as 400 (`ValidationError`), for example when the money went between `get_status`
+and `start`.
 
 Under a term `start(is_auto_renewal=...)` ignores the argument: the toggle stays
 as in the signed consent. Consent, renewal and early termination are
