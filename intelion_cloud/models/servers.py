@@ -547,6 +547,12 @@ class ServerStatus:
     Server-side source: ``retrieve_server_can_start`` in
     ``website/user_panel/views/views.py``. Shapes are taken from the view, not
     from the OpenAPI schema (the endpoint is a plain ``Response`` dict).
+
+    ``can_start`` answers only "is capacity free": the catalog and Placement, or the card held
+    by a server powered off under a term. It does not check ``server_state`` (maintenance, a
+    stop in progress), so a start can still answer 409 while ``can_start`` is ``True``. To decide
+    "start or ask the customer to act" read ``requires_term_consent`` and
+    ``launch_shortfall_rub_cents``, not ``can_start`` and not ``is_enough_money_for_full_period``.
     """
 
     can_start: bool
@@ -583,19 +589,25 @@ class ServerStatus:
     requires_term_consent: Optional[bool] = None
     """The rental term must be signed in the web panel before the start (PRT-474).
 
-    The same flag as ``CloudServer.requires_term_consent``, repeated here so one call tells why a
-    start will fail. While it is ``True`` the start answers 409 ``TERM_CONDITIONS_REQUIRED``, and
-    ``can_start`` may still be ``True``: it describes the server, not the term. Computed even
-    when ``can_start`` is false. ``None`` on an older server.
+    The same flag as ``CloudServer.requires_term_consent``. While it is ``True`` the start
+    answers 409 ``TERM_CONDITIONS_REQUIRED``, even when ``can_start`` is ``True``. It is computed
+    even when ``can_start`` is false. ``None`` on an older server. The flag does not list every
+    refusal: without a chosen client type the start answers 409 ``LEGAL_TYPE_REQUIRED``, and
+    ``False`` does not rule out 409 ``LEGACY_TERMS_CONSENT_REQUIRED`` or
+    ``TERM_RENEWAL_IN_PROGRESS``.
     """
     launch_shortfall_rub_cents: Optional[int] = None
     """Kopecks the start lacks (PRT-474): ``0`` means the money is enough.
 
-    The number the start gate itself checks (``launch_required_rub_cents`` minus
-    ``launch_funds_rub_cents``, never below zero), so a program can decide "start or ask the
-    customer to top up" without rebuilding the rule. ``is_enough_money_for_full_period`` does not
-    follow the term rules, do not use it for this decision. ``None`` when ``can_start`` is false
+    The server computes it with the start gate's own rule, so a program can decide "start or ask
+    the customer to top up" without rebuilding it. Do not derive it from
+    ``launch_required_rub_cents`` minus ``launch_funds_rub_cents``: when the requirement is ``0``
+    (an open act already holds the money) there is no shortfall at any funds, even negative ones.
+    Two entries start with a shortfall above ``0``: a start with ``run_on_affordable_time`` and
+    the resume of an hourly server from cold storage. ``None`` when ``can_start`` is false
     (``0`` would read as "the money is enough") or on an older server.
+    ``is_enough_money_for_full_period`` follows the term rules too, but differs from the gate: it
+    does not subtract the reservation of the client's other launches in flight.
     """
     upcoming_term_payment: Optional[UpcomingTermPayment] = None
     """Another server's term payment this start would leave unpaid; ``None`` when there is none."""
