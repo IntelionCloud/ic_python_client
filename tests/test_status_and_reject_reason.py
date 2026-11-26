@@ -20,7 +20,7 @@ import respx
 
 from intelion_cloud import IntelionCloud, ServerCreateRejectReason
 from intelion_cloud.exceptions import APIError, ConflictError, ValidationError
-from intelion_cloud.models import ServerStatus
+from intelion_cloud.models import ServerStatus, UpcomingTermPayment
 
 from .conftest import API_URL, BASE_URL, SAMPLE_CLOUD_SERVER
 
@@ -170,3 +170,85 @@ class TestCreateRejectReason:
         assert APIError("x", status_code=500, response_body="html").reason is None
         assert APIError("x", status_code=400, response_body={"reason": 7}).reason is None
         assert APIError("x", status_code=400, response_body={"reason": ""}).reason is None
+
+
+UPCOMING_PAYMENT = {
+    "server_id": 77,
+    "server_name": "train-box",
+    "amount_rub_cents": 4_000_000,
+    "date": "2026-12-01T09:30:00+00:00",
+    "shortfall_rub_cents": 1_500_000,
+}
+
+STATUS_TERM_UNSIGNED = {
+    **STATUS_CAN_START,
+    "requires_term_consent": True,
+    "launch_shortfall_rub_cents": 2_000_000,
+    "upcoming_term_payment": UPCOMING_PAYMENT,
+}
+
+
+class TestServerStatusLaunchBlockers:
+    """PRT-474: the status answer names what stops the start, `can_start` alone does not."""
+
+    def test_parses_term_consent_shortfall_and_upcoming_payment(self):
+        status = ServerStatus.from_dict(STATUS_TERM_UNSIGNED)
+        assert status.can_start is True
+        assert status.requires_term_consent is True
+        assert status.launch_shortfall_rub_cents == 2_000_000
+        assert status.upcoming_term_payment == UpcomingTermPayment(
+            server_id=77,
+            server_name="train-box",
+            amount_rub_cents=4_000_000,
+            date="2026-12-01T09:30:00+00:00",
+            shortfall_rub_cents=1_500_000,
+        )
+
+    def test_false_flag_and_zero_shortfall_are_not_none(self):
+        """``False`` and ``0`` mean "nothing blocks": they must not collapse into ``None``."""
+        status = ServerStatus.from_dict(
+            {**STATUS_CAN_START, "requires_term_consent": False, "launch_shortfall_rub_cents": 0}
+        )
+        assert status.requires_term_consent is False
+        assert status.launch_shortfall_rub_cents == 0
+
+    def test_cannot_start_keeps_shortfall_none_but_consent_flag(self):
+        """``None`` shortfall (``0`` would read as "enough money"), consent still reported."""
+        status = ServerStatus.from_dict(
+            {
+                **STATUS_CANNOT_START,
+                "requires_term_consent": True,
+                "launch_shortfall_rub_cents": None,
+            }
+        )
+        assert status.can_start is False
+        assert status.launch_shortfall_rub_cents is None
+        assert status.requires_term_consent is True
+
+    def test_no_upcoming_payment_is_none(self):
+        for payload in (
+            {**STATUS_CAN_START, "upcoming_term_payment": None},
+            {**STATUS_CAN_START},
+        ):
+            assert ServerStatus.from_dict(payload).upcoming_term_payment is None
+
+    def test_old_server_without_the_new_fields(self):
+        status = ServerStatus.from_dict(STATUS_CAN_START)
+        assert status.requires_term_consent is None
+        assert status.launch_shortfall_rub_cents is None
+        assert status.upcoming_term_payment is None
+
+    def test_upcoming_payment_with_missing_optional_keys(self):
+        payment = UpcomingTermPayment.from_dict({"server_id": 5, "amount_rub_cents": 100})
+        assert payment.server_name == ""
+        assert payment.date is None
+        assert payment.shortfall_rub_cents == 0
+
+    @respx.mock(base_url=API_URL)
+    def test_get_status_exposes_the_new_fields(self, respx_mock):
+        respx_mock.get("cloud-servers/42/status/").respond(200, json=STATUS_TERM_UNSIGNED)
+        client = IntelionCloud(token="tok", base_url=BASE_URL)
+        status = client.cloud_servers.get_status(42)
+        assert status.requires_term_consent is True
+        assert status.launch_shortfall_rub_cents == 2_000_000
+        assert status.upcoming_term_payment.server_id == 77
