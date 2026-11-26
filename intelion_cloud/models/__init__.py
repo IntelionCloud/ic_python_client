@@ -23,6 +23,7 @@ from .servers import (
     Promocode,
     ServerStatus,
     SoftwareAddonInstance,
+    UpcomingTermPayment,
     UsageAct,
     WhiteIP,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "Promocode",
     "ServerStatus",
     "SoftwareAddonInstance",
+    "UpcomingTermPayment",
     "UsageAct",
     "WhiteIP",
     "User",

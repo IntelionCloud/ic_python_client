@@ -3,6 +3,16 @@
 Notable changes of the `intelion-cloud` SDK. GitHub Releases add an
 auto-generated list of merged commits on top of this file.
 
+## 0.8.0 (2026-11-26)
+
+Pairs with PRT-474 on the server: `GET cloud-servers/{id}/status/` now says what stops a start.
+
+- `ServerStatus.requires_term_consent` (`Optional[bool]`): the rental term must be signed in the web panel before the start. While it is `True` the start answers 409 `TERM_CONDITIONS_REQUIRED`, or 409 `LEGAL_TYPE_REQUIRED` while the customer has not chosen a client type in the profile, even when `can_start` is `True`. Computed even when `can_start` is false. `False` does not rule out other refusals: 409 `LEGACY_TERMS_CONSENT_REQUIRED`, 409 `TERM_RENEWAL_IN_PROGRESS`, maintenance.
+- `ServerStatus.launch_shortfall_rub_cents` (`Optional[int]`, kopecks): how much the start lacks, `0` when the money is enough, so "start or ask the customer to top up" can be decided without rebuilding the rule. Do not compute it as `launch_required_rub_cents - launch_funds_rub_cents`: when the requirement is `0` (an open act holds the money) there is no shortfall at any funds. Two entries start with a shortfall above `0`: a start with `run_on_affordable_time` of a server that has run before and is not under a term (`affordable_runtime_seconds > 0`, no disk-size order; a first start is not exempted by the flag), and the resume of an hourly server from cold storage. `None` when `can_start` is false.
+- `can_start` only says capacity is free (catalog and Placement, or the card held by a server powered off under a term); it does not check `server_state`, so a start can answer 409 with `can_start == True`. `is_enough_money_for_full_period` follows the term rules but may differ from the start gate, for example it does not subtract the reservation of the client's other launches in flight.
+- `ServerStatus.upcoming_term_payment` (`Optional[UpcomingTermPayment]`): another server's mandatory term payment that this start would leave unpaid (`server_id`, `server_name`, `amount_rub_cents`, `date`, `shortfall_rub_cents`). The server sent it before, the client dropped it silently. `UpcomingTermPayment` is exported from `intelion_cloud` and `intelion_cloud.models`.
+- Old servers do not send the first two fields: they stay `None`.
+
 ## 0.7.1 (2026-11-25)
 
 - Fix: `cloud_servers.start()` raised `KeyError: 'id'` when the server was queued (no free GPUs) or started from cold storage, because the server answers these accepted starts with a short body. `start()`, `stop()` and `reboot()` now re-read the server with `get()` when the answer is not a full server body and return it. A queued server has `server_state == ServerState.QUEUED`. After a start from cold storage the returned server still shows `COLD_STORAGE` or `COLD_GRACE` while the restore runs in the background: poll `get()`, it moves to `STARTING` (or to `QUEUED` if no card is free); if the restore fails it stays stopped with `server_state == 0`. Do not call `start()` again while it shows cold storage.

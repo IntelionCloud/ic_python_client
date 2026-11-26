@@ -255,7 +255,13 @@ class CloudServers(SyncResource):
     # --- Info endpoints ---
 
     def get_status(self, server_id: int) -> ServerStatus:
-        """Check if a server can be started and get affordable runtime."""
+        """Why a start may fail, and the affordable runtime.
+
+        ``can_start`` only says capacity is free. Before a start read
+        ``requires_term_consent`` (sign the term in the web panel) and
+        ``launch_shortfall_rub_cents`` (``0`` = enough money, otherwise top up), see
+        :class:`ServerStatus` for the exceptions.
+        """
         data = self._get(f"{_PATH}{server_id}/status/")
         return ServerStatus.from_dict(data)
 
@@ -430,6 +436,7 @@ class AsyncCloudServers(AsyncResource):
         return CloudServer.from_dict(data)
 
     async def get_status(self, server_id: int) -> ServerStatus:
+        """Async twin of the sync ``get_status``: same fields, same caveats."""
         data = await self._get(f"{_PATH}{server_id}/status/")
         return ServerStatus.from_dict(data)
 

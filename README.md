@@ -166,6 +166,24 @@ except ConflictError as e:
         print(e)  # the server's message for the user
 ```
 
+Before a start, ask what would stop it. `can_start` only says capacity is free; read
+`requires_term_consent` and `launch_shortfall_rub_cents` instead:
+
+```python
+status = client.cloud_servers.get_status(42)
+if status.requires_term_consent:
+    print("Sign the term conditions in the web panel first")
+elif status.launch_shortfall_rub_cents:  # None when can_start is False, 0 = enough
+    print(f"Top up at least {status.launch_shortfall_rub_cents / 100:.2f} RUB")
+elif status.can_start:
+    client.cloud_servers.start(42)
+```
+
+The check is advisory: a start can still be refused (`LEGACY_TERMS_CONSENT_REQUIRED`,
+`TERM_RENEWAL_IN_PROGRESS`, maintenance), so keep handling `ConflictError`. A refusal for
+money comes as 400 (`ValidationError`), for example when the money went between `get_status`
+and `start`.
+
 Under a term `start(is_auto_renewal=...)` ignores the argument: the toggle stays
 as in the signed consent. Consent, renewal and early termination are
 personal-account actions and are not part of API v2; the SDK only reads their

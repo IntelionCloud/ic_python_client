@@ -512,12 +512,47 @@ class CloudServer:
 
 
 @dataclass(frozen=True)
+class UpcomingTermPayment:
+    """Nearest mandatory term payment of another server that this start would leave unpaid.
+
+    Server-side source: ``upcoming_term_payment_warning`` (PRT-259). Money of one client pays
+    both this start and the term renewal of the client's other server; whoever reserved first
+    gets it, so the status check warns before the start.
+    """
+
+    server_id: int
+    server_name: str
+    amount_rub_cents: int
+    """The renewal payment of the other server (kopecks)."""
+    date: Optional[str] = None
+    """ISO datetime when the other server's current act ends and the payment is due."""
+    shortfall_rub_cents: int = 0
+    """How many kopecks short the client will be on that date after this start."""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> UpcomingTermPayment:
+        return cls(
+            server_id=data.get("server_id", 0),
+            server_name=data.get("server_name", "") or "",
+            amount_rub_cents=data.get("amount_rub_cents", 0),
+            date=_get(data, "date"),
+            shortfall_rub_cents=data.get("shortfall_rub_cents", 0),
+        )
+
+
+@dataclass(frozen=True)
 class ServerStatus:
     """Result of the pre-start status check endpoint.
 
     Server-side source: ``retrieve_server_can_start`` in
     ``website/user_panel/views/views.py``. Shapes are taken from the view, not
     from the OpenAPI schema (the endpoint is a plain ``Response`` dict).
+
+    ``can_start`` answers only "is capacity free": the catalog and Placement, or the card held
+    by a server powered off under a term. It does not check ``server_state`` (maintenance, a
+    stop in progress), so a start can still answer 409 while ``can_start`` is ``True``. To decide
+    "start or ask the customer to act" read ``requires_term_consent`` and
+    ``launch_shortfall_rub_cents``, not ``can_start`` and not ``is_enough_money_for_full_period``.
     """
 
     can_start: bool
@@ -551,6 +586,33 @@ class ServerStatus:
     rebuild the sum from the profile: a second copy of the rule drifts from the
     gate. ``None`` when ``can_start`` is false or on an older server.
     """
+    requires_term_consent: Optional[bool] = None
+    """The rental term must be signed in the web panel before the start (PRT-474).
+
+    The same flag as ``CloudServer.requires_term_consent``. While it is ``True`` the start
+    answers 409 ``TERM_CONDITIONS_REQUIRED``, or 409 ``LEGAL_TYPE_REQUIRED`` while the customer
+    has not chosen a client type in the profile, even when ``can_start`` is ``True``. It is
+    computed even when ``can_start`` is false. ``None`` on an older server. ``False`` does not
+    rule out other refusals: 409 ``LEGACY_TERMS_CONSENT_REQUIRED``, 409
+    ``TERM_RENEWAL_IN_PROGRESS``, maintenance.
+    """
+    launch_shortfall_rub_cents: Optional[int] = None
+    """Kopecks the start lacks (PRT-474): ``0`` means the money is enough.
+
+    The server computes it with the start gate's own rule, so a program can decide "start or ask
+    the customer to top up" without rebuilding it. Do not derive it from
+    ``launch_required_rub_cents`` minus ``launch_funds_rub_cents``: when the requirement is ``0``
+    (an open act already holds the money) there is no shortfall at any funds, even negative ones.
+    Two entries start with a shortfall above ``0``: a start with ``run_on_affordable_time`` of a
+    server that has run before and is not under a term (``affordable_runtime_seconds > 0``, no
+    disk-size order; a first start is not exempted by the flag), and the resume of an hourly
+    server from cold storage. ``None`` when ``can_start`` is false
+    (``0`` would read as "the money is enough") or on an older server.
+    ``is_enough_money_for_full_period`` follows the term rules too, but may differ from the gate:
+    for example it does not subtract the reservation of the client's other launches in flight.
+    """
+    upcoming_term_payment: Optional[UpcomingTermPayment] = None
+    """Another server's term payment this start would leave unpaid; ``None`` when there is none."""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ServerStatus:
@@ -566,4 +628,11 @@ class ServerStatus:
             remaining_monthly_seconds=_get(data, "remaining_monthly_seconds"),
             launch_required_rub_cents=_get(data, "launch_required_rub_cents"),
             launch_funds_rub_cents=_get(data, "launch_funds_rub_cents"),
+            requires_term_consent=(
+                None
+                if _get(data, "requires_term_consent") is None
+                else bool(_get(data, "requires_term_consent"))
+            ),
+            launch_shortfall_rub_cents=_get(data, "launch_shortfall_rub_cents"),
+            upcoming_term_payment=_parse_nested(data, "upcoming_term_payment", UpcomingTermPayment),
         )

@@ -60,12 +60,13 @@ from .models import (
     RotatedInferenceApiKey,
     ServerStatus,
     SoftwareAddonInstance,
+    UpcomingTermPayment,
     UsageAct,
     User,
     WhiteIP,
 )
 
-__version__ = "0.7.1"
+__version__ = "0.8.0"
 
 __all__ = [
     # Clients
@@ -89,6 +90,7 @@ __all__ = [
     "SoftwareAddon",
     "OSImage",
     "PasswordRotation",
+    "UpcomingTermPayment",
     "UsageAct",
     "DebtInfo",
     "Promocode",
